@@ -3,6 +3,7 @@ FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     TZ=Etc/UTC \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PROTEOBENCH=0.0.0+aichor \
     UV_SYSTEM_PYTHON=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"
