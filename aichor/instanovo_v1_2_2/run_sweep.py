@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -54,7 +55,18 @@ def run_command(command: list[str], log_path: Path) -> None:
     with log_path.open("w", encoding="utf-8") as log:
         log.write(" ".join(command) + "\n\n")
         log.flush()
-        subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
+        try:
+            subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
+        except subprocess.CalledProcessError:
+            print(f"Command failed. Last lines from {log_path}:", file=sys.stderr)
+            for line in tail_log(log_path):
+                print(line.rstrip(), file=sys.stderr)
+            raise
+
+
+def tail_log(log_path: Path, lines: int = 200) -> deque[str]:
+    with log_path.open("r", encoding="utf-8", errors="replace") as log:
+        return deque(log, maxlen=lines)
 
 
 def resolve_input_files(args: argparse.Namespace, data_dir: Path) -> list[Path]:
@@ -271,6 +283,14 @@ def sync_outputs(local_root: Path, output_prefix: str) -> None:
     subprocess.run(["aws", "s3", "sync", str(local_root), s3_target], check=True)
 
 
+def finalize_outputs(work_dir: Path, output_prefix: str) -> None:
+    comments = Path(__file__).with_name("comments_for_submission.md")
+    if comments.exists():
+        shutil.copy2(comments, work_dir / "comments_for_submission.md")
+    write_checksums(work_dir)
+    sync_outputs(work_dir, output_prefix)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
@@ -306,29 +326,37 @@ def main() -> int:
     output_dir = work_dir / "runs"
     output_dir.mkdir(exist_ok=True)
 
-    mgf_files = resolve_input_files(args, data_dir)
-    metrics_by_run: dict[str, dict[str, Any]] = {}
-    for config in RUN_MATRIX:
-        run_dir = output_dir / config.name
-        run_dir.mkdir(parents=True, exist_ok=True)
-        results_csv = run_instanovo(config, mgf_files, run_dir, args)
-        if args.full or args.compute_smoke_metrics:
-            metrics_by_run[config.name] = compute_metrics(results_csv, config, args, run_dir)
+    pending_error = False
+    try:
+        mgf_files = resolve_input_files(args, data_dir)
+        metrics_by_run: dict[str, dict[str, Any]] = {}
+        for config in RUN_MATRIX:
+            run_dir = output_dir / config.name
+            run_dir.mkdir(parents=True, exist_ok=True)
+            results_csv = run_instanovo(config, mgf_files, run_dir, args)
+            if args.full or args.compute_smoke_metrics:
+                metrics_by_run[config.name] = compute_metrics(results_csv, config, args, run_dir)
 
-    if metrics_by_run:
-        summary = flatten_metrics(metrics_by_run)
-        summary.to_csv(work_dir / "metrics_summary.csv", index=False)
-        (work_dir / "metrics_summary.json").write_text(
-            json.dumps(metrics_by_run, indent=2, default=str),
-            encoding="utf-8",
-        )
-    else:
-        (work_dir / "metrics_summary.csv").write_text("run_name,metrics_status\nsmoke,skipped\n", encoding="utf-8")
-
-    comments = Path(__file__).with_name("comments_for_submission.md")
-    shutil.copy2(comments, work_dir / "comments_for_submission.md")
-    write_checksums(work_dir)
-    sync_outputs(work_dir, args.output_prefix)
+        if metrics_by_run:
+            summary = flatten_metrics(metrics_by_run)
+            summary.to_csv(work_dir / "metrics_summary.csv", index=False)
+            (work_dir / "metrics_summary.json").write_text(
+                json.dumps(metrics_by_run, indent=2, default=str),
+                encoding="utf-8",
+            )
+        else:
+            (work_dir / "metrics_summary.csv").write_text("run_name,metrics_status\nsmoke,skipped\n", encoding="utf-8")
+    except Exception:
+        pending_error = True
+        raise
+    finally:
+        try:
+            finalize_outputs(work_dir, args.output_prefix)
+        except Exception as error:
+            if pending_error:
+                print(f"Failed to finalize Aichor outputs: {error}", file=sys.stderr)
+            else:
+                raise
     return 0
 
 

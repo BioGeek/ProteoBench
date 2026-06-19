@@ -8,12 +8,7 @@ builder:
 spec:
   operator: jobset
   image: proteobench-instanovo-v1-2-2
-  command: >
-    cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
-    python run_sweep.py
-      --full
-      --work-dir /workspace/proteobench_instanovo_v1_2_2
-      --output-prefix instanovo_v1_2_2_proteobench
+  command: cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 && python run_sweep.py --full --work-dir /workspace/proteobench_instanovo_v1_2_2 --output-prefix instanovo_v1_2_2_proteobench
   timeout: "3d"
   types:
     worker:
