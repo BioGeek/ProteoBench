@@ -280,7 +280,33 @@ def sync_outputs(local_root: Path, output_prefix: str) -> None:
 
     s3_target = target if target.startswith("s3://") else f"s3://{target}/output"
     s3_target = s3_target.rstrip("/") + f"/{output_prefix}"
-    subprocess.run(["aws", "s3", "sync", str(local_root), s3_target], check=True)
+    upload_tree_to_s3(local_root, s3_target)
+
+
+def upload_tree_to_s3(local_root: Path, s3_target: str) -> None:
+    import s3fs
+
+    client_kwargs = {}
+    endpoint_url = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
+    if endpoint_url:
+        client_kwargs["endpoint_url"] = endpoint_url
+
+    fs = s3fs.S3FileSystem(
+        key=os.environ.get("AWS_ACCESS_KEY_ID"),
+        secret=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        token=os.environ.get("AWS_SESSION_TOKEN"),
+        client_kwargs=client_kwargs,
+    )
+    fs.makedirs(s3_target, exist_ok=True)
+
+    uploaded = 0
+    for path in sorted(local_root.rglob("*")):
+        if not path.is_file():
+            continue
+        relative_path = path.relative_to(local_root).as_posix()
+        fs.put(str(path), f"{s3_target}/{relative_path}")
+        uploaded += 1
+    print(f"Uploaded {uploaded} files to {s3_target}")
 
 
 def finalize_outputs(work_dir: Path, output_prefix: str) -> None:

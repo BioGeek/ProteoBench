@@ -22,12 +22,15 @@ RUN apt-get update \
 COPY . /workspace/ProteoBench
 
 ARG INSTANOVO_INSTALL_SPEC=instanovo==1.2.2
+ARG POLARS_INSTALL_SPEC=polars==1.41.2
 
 RUN python -m pip install --no-cache-dir --upgrade pip uv \
     && uv venv /opt/venv \
     && uv pip install --python /opt/venv/bin/python "${INSTANOVO_INSTALL_SPEC}" \
     && uv pip install --python /opt/venv/bin/python ".[dev]" \
-    && uv pip install --python /opt/venv/bin/python boto3
+    && uv pip uninstall --python /opt/venv/bin/python polars-lts-cpu polars-runtime-32 polars \
+    && uv pip install --python /opt/venv/bin/python "${POLARS_INSTALL_SPEC}" \
+    && uv pip install --python /opt/venv/bin/python s3fs
 
 WORKDIR /workspace/ProteoBench/aichor/instanovo_v1_2_2
 
