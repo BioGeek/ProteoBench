@@ -32,9 +32,9 @@ python aichor/instanovo_v1_2_2/run_sweep.py \
 The full run downloads the ProteoBench De Novo DDA-HCD combined MGF by default. If multiple MGF files are supplied through `--input-dir`, each mode is run on every MGF and predictions are concatenated without rewriting spectrum identifiers.
 
 ```bash
-.venv-aichor/bin/aichor experiments submit commit-sha "$(git rev-parse HEAD)" \
-  --branch run-instanovo-v1.2.2-aichor \
-  --manifest-path aichor/instanovo_v1_2_2/manifest.yaml
+.venv-aichor/bin/aichor experiments submit local \
+  --repo-dir . \
+  --message "Run InstaNovo v1.2.2 ProteoBench sweep"
 ```
 
 All run directories, predictions, per-run configs, logs, checksums, metric JSON, metric CSV, and submission comments are synced to `AICHOR_OUTPUT_PATH` when that environment variable is available.

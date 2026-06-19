@@ -1,0 +1,14 @@
+.venv-aichor/
+.venv*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+htmlcov/
+outputs/
+dist/
+build/
+*.egg-info/

@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
+kind: AIchorManifest
+apiVersion: 0.2.3
+builder:
+  image: proteobench-instanovo-v1-2-2
+  dockerfile: ./aichor/instanovo_v1_2_2/Dockerfile
+  context: .
+spec:
+  operator: jobset
+  image: proteobench-instanovo-v1-2-2
+  command: >
+    cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
+    python run_sweep.py
+      --full
+      --work-dir /workspace/proteobench_instanovo_v1_2_2
+      --output-prefix instanovo_v1_2_2_proteobench
+  timeout: "3d"
+  types:
+    worker:
+      count: 1
+      completions: 1
+      parallelisms: 1
+      resources:
+        cpus: 24
+        ramRatio: 8
+        accelerators:
+          gpu:
+            count: 1
+            type: gpu
+            product: NVIDIA-H100-80GB-HBM3
