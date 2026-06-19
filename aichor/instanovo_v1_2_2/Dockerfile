@@ -1,6 +1,8 @@
 FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
 
 ENV PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
     UV_SYSTEM_PYTHON=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"
@@ -8,7 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /workspace/ProteoBench
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get install -yq --no-install-recommends \
         awscli \
         ca-certificates \
         curl \
