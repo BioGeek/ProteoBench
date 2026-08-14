@@ -8,8 +8,11 @@ builder:
 spec:
   operator: jobset
   image: proteobench-instanovo-v1-2-2
-  command: cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 && python run_sweep.py --full --work-dir /workspace/proteobench_instanovo_v1_2_2 --output-prefix instanovo_v1_2_2_proteobench
-  timeout: "3d"
+  # InstaNovo+ standalone: `instanovo diffusion predict --no-refinement`, i.e. the full
+  # reverse diffusion process from a uniform sample, with no transformer involved.
+  # Runs inference and metrics in one job (the AIchor S3 auto-detection fix landed, so
+  # `instanovo predict` no longer dies after inference).
+  command: cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 && python run_sweep.py --full --only diffusion_only --work-dir /workspace/proteobench_diffonly_rep3 --output-prefix instanovo_v1_2_2_diffusion_only_rep3
   types:
     worker:
       count: 1

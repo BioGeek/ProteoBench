@@ -21,13 +21,19 @@ RUN apt-get update \
 
 COPY . /workspace/ProteoBench
 
+# Pinned: the harness strips the hosted-platform marker env vars for this version
+# (see HOSTED_PLATFORM_MARKERS in run_sweep.py). Later versions do not need that.
 ARG INSTANOVO_INSTALL_SPEC=instanovo==1.2.2
 ARG POLARS_INSTALL_SPEC=polars==1.41.2
+# torch>=2.6 rejects the defaultdict inside the InstaNovo checkpoints: InstaNovo calls
+# torch.load(..., weights_only=True) explicitly, and the restricted unpickler in newer
+# torch refuses SETITEM on a defaultdict. torch 2.5.x has no such check.
+ARG TORCH_INSTALL_SPEC="torch<2.6"
 
 RUN python -m pip install --no-cache-dir --upgrade pip uv \
     && uv venv /opt/venv \
-    && uv pip install --python /opt/venv/bin/python "${INSTANOVO_INSTALL_SPEC}" \
-    && uv pip install --python /opt/venv/bin/python ".[dev]" \
+    && uv pip install --python /opt/venv/bin/python "${INSTANOVO_INSTALL_SPEC}" "${TORCH_INSTALL_SPEC}" \
+    && uv pip install --python /opt/venv/bin/python -e ".[dev]" \
     && uv pip uninstall --python /opt/venv/bin/python polars-lts-cpu polars-runtime-32 polars \
     && uv pip install --python /opt/venv/bin/python "${POLARS_INSTALL_SPEC}" \
     && uv pip install --python /opt/venv/bin/python s3fs
