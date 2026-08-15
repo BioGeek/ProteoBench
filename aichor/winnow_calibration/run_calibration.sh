@@ -47,7 +47,7 @@ winnow diagnose-calibration \
     diagnostics.label_source=sequence \
     dataset.spectrum_path_or_directory="$WORK_DIR/data/spectra.mgf" \
     dataset.predictions_path="$WORK_DIR/data/predictions.csv" \
-    dataset.data_loader=instanovo \
+    data_loader=instanovo \
     koina.server_url="$KOINA_SERVER_URL" \
     koina.ssl="$KOINA_SSL" \
     koina.input_constants.collision_energies="$COLLISION_ENERGY" \

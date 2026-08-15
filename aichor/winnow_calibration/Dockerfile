@@ -51,4 +51,6 @@ COPY entrypoint.koina.sh /usr/local/bin/entrypoint.koina.sh
 COPY run_calibration.sh /usr/local/bin/run_calibration.sh
 RUN chmod +x /usr/local/bin/entrypoint.koina.sh /usr/local/bin/run_calibration.sh
 
+# Kept for plain `docker run`. AIchor replaces it by running spec.command through a
+# shell, so its manifest invokes the wrapper explicitly instead of relying on this.
 ENTRYPOINT ["/usr/local/bin/entrypoint.koina.sh"]

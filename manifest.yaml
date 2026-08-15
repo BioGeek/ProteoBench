@@ -19,7 +19,10 @@ builder:
 spec:
   operator: jobset
   image: proteobench-winnow-koina
+  # AIchor runs spec.command as a shell command, which replaces the image
+  # ENTRYPOINT, so Koina's start-and-wait wrapper is invoked explicitly here.
   command: >-
+    /usr/local/bin/entrypoint.koina.sh
     /usr/local/bin/run_calibration.sh
     beam10
     s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/e3543482-6b63-4467-87ac-868cddd7ae04/instanovo_v1_2_2_metrics/runs/beam10/raw_predictions.csv
