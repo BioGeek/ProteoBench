@@ -1,0 +1,78 @@
+# InstaNovo loader for the ProteoBench de novo benchmark.
+# Copied from winnow's shipped config (a custom config file replaces its package
+# counterpart wholesale rather than merging key-by-key) with extra residue
+# remappings for the notation this benchmark's ground truth uses.
+# --- InstaNovo data loading configuration ---
+
+_target_: winnow.datasets.data_loaders.InstaNovoDatasetLoader
+
+# When true, add experiment_name + spectrum_id to parquet/ipc spectrum files.
+# MGF files always receive these columns regardless of this setting.
+add_index_cols: false
+
+residue_masses: ${residue_masses}
+residue_remapping:  # Used to map InstaNovo legacy notations to UNIMOD tokens.
+  "M(ox)": "M[UNIMOD:35]"  # Oxidation
+  "M(+15.99)": "M[UNIMOD:35]"  # Oxidation
+  "S(p)": "S[UNIMOD:21]"  # Phosphorylation
+  "T(p)": "T[UNIMOD:21]"  # Phosphorylation
+  "Y(p)": "Y[UNIMOD:21]"  # Phosphorylation
+  "S(+79.97)": "S[UNIMOD:21]"  # Phosphorylation
+  "T(+79.97)": "T[UNIMOD:21]"  # Phosphorylation
+  "Y(+79.97)": "Y[UNIMOD:21]"  # Phosphorylation
+  "Q(+0.98)": "Q[UNIMOD:7]"  # Deamidation
+  "N(+0.98)": "N[UNIMOD:7]"  # Deamidation
+  "Q(+.98)": "Q[UNIMOD:7]"  # Deamidation
+  "N(+.98)": "N[UNIMOD:7]"  # Deamidation
+  "C(+57.02)": "C[UNIMOD:4]"  # Carbamidomethylation
+  # ProteoBench de novo ground truth (nine-species benchmark) writes InstaNovo's bare
+  # notation with three decimals, where the entries above are the parenthesised
+  # two-decimal forms. Both spellings appear in the wild, so map both.
+  "C+57.021": "C[UNIMOD:4]"    # Carbamidomethylation
+  "M+15.995": "M[UNIMOD:35]"   # Oxidation
+  "N+0.984": "N[UNIMOD:7]"     # Deamidation
+  "Q+0.984": "Q[UNIMOD:7]"     # Deamidation
+  "+42.011": "[UNIMOD:1]"      # N-terminal acetylation
+  "+43.006": "[UNIMOD:5]"      # N-terminal carbamylation
+  "-17.027": "[UNIMOD:385]"    # N-terminal ammonia loss
+  # Carbamylation followed by ammonia loss, which the ground truth writes as one token.
+  "+43.006-17.027": "[UNIMOD:5][UNIMOD:385]"
+  # N-terminal modifications.
+  "(+42.01)": "[UNIMOD:1]"  # Acetylation
+  "(+43.01)": "[UNIMOD:5]"  # Carbamylation
+  "(-17.03)": "[UNIMOD:385]"  # Ammonia loss
+# Beam column prefixes for matching columns in the predictions CSV file.
+#
+# Each prefix is appended with a beam index (0, 1, 2, ...) to form the full column name.
+# The predictions CSV must contain columns matching EXACTLY: <prefix><beam_index>
+#
+# Required columns per beam (where N is 0, 1, 2, ...):
+#   - {sequence}N         → peptide sequence for beam N (e.g., "predictions_beam_0")
+#   - {log_probability}N  → log probability for beam N  (e.g., "predictions_log_probability_beam_0")
+#   - {token_log_probabilities}N → per-token log probs  (e.g., "predictions_token_log_probabilities_0")
+#
+# Example CSV columns for 3 beams:
+#   predictions_beam_0, predictions_beam_1, predictions_beam_2,
+#   predictions_log_probability_beam_0, predictions_log_probability_beam_1, predictions_log_probability_beam_2,
+#   predictions_token_log_probabilities_0, predictions_token_log_probabilities_1, predictions_token_log_probabilities_2
+#
+# Set `beam_columns` to null to disable beam loading entirely.
+# Column name mapping for the top-1 predictions CSV.
+#
+# Maps the CSV column names to the internal names used by Winnow.
+# Override these if you are loading predictions from an older InstaNovo version
+# that wrote different column headers.
+#
+# Default CSV column      | Description
+# predictions             | Raw peptide string (top-1)
+# predictions_tokenised   | Tokenised peptide (top-1)
+# log_probs               | Log-probability of the top-1 prediction
+column_mapping:
+  predictions: "predictions"
+  predictions_tokenised: "predictions_tokenised"
+  log_probability: "log_probs"
+
+beam_columns:
+  sequence: "predictions_beam_"
+  log_probability: "predictions_log_probability_beam_"
+  token_log_probabilities: "predictions_token_log_probabilities_beam_"

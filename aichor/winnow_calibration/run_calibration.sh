@@ -48,7 +48,10 @@ aws_s3 cp "$PREDICTIONS_URI" "$WORK_DIR/data/predictions.csv"
 aws_s3 cp "$SPECTRA_URI" "$WORK_DIR/data/$SPECTRA_FILENAME"
 
 echo "[run_calibration] diagnosing calibration for $MODE"
+WINNOW_CONFIG_DIR="${WINNOW_CONFIG_DIR:-/opt/winnow-configs}"
+
 winnow diagnose-calibration \
+    --config-dir "$WINNOW_CONFIG_DIR" \
     diagnostics.label_source=sequence \
     dataset.spectrum_path_or_directory="$WORK_DIR/data/$SPECTRA_FILENAME" \
     dataset.predictions_path="$WORK_DIR/data/predictions.csv" \

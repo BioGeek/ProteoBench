@@ -52,6 +52,9 @@ ENV PATH="/opt/winnow-venv/bin:$PATH"
 # fragment-match and iRT features need. Override with -e MODEL_PATTERN=... to change it.
 ENV MODEL_PATTERN="*22PTM*"
 
+# Extra residue remappings for this benchmark's ground-truth notation. Winnow merges a
+# custom config dir over its own, so only the files that differ need to be present.
+COPY configs /opt/winnow-configs
 COPY entrypoint.koina.sh /usr/local/bin/entrypoint.koina.sh
 COPY run_calibration.sh /usr/local/bin/run_calibration.sh
 RUN chmod +x /usr/local/bin/entrypoint.koina.sh /usr/local/bin/run_calibration.sh
