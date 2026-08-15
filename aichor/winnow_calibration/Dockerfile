@@ -57,7 +57,11 @@ ENV MODEL_PATTERN="*22PTM*"
 COPY configs /opt/winnow-configs
 COPY entrypoint.koina.sh /usr/local/bin/entrypoint.koina.sh
 COPY run_calibration.sh /usr/local/bin/run_calibration.sh
-RUN chmod +x /usr/local/bin/entrypoint.koina.sh /usr/local/bin/run_calibration.sh
+COPY run_predict.sh /usr/local/bin/run_predict.sh
+COPY run_rerank.sh /usr/local/bin/run_rerank.sh
+COPY beam_candidates.py /usr/local/bin/beam_candidates.py
+RUN chmod +x /usr/local/bin/entrypoint.koina.sh /usr/local/bin/run_calibration.sh \
+        /usr/local/bin/run_predict.sh /usr/local/bin/run_rerank.sh
 
 # Kept for plain `docker run`. AIchor replaces it by running spec.command through a
 # shell, so its manifest invokes the wrapper explicitly instead of relying on this.
