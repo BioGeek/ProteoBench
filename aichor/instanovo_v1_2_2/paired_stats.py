@@ -37,6 +37,9 @@ PUBLISHED = {
     "greedy_refined": {"mass": 0.696408, "exact": 0.412266},
     "beam10": {"mass": 0.727818, "exact": 0.422150},
     "beam10_refined": {"mass": 0.731721, "exact": 0.443822},
+    "knapsack_beam10": {"mass": 0.728269, "exact": 0.422278},
+    "knapsack_beam10_refined": {"mass": 0.732120, "exact": 0.443725},
+    "diffusion_only": {"mass": 0.714199, "exact": 0.420528},
 }
 
 
@@ -92,6 +95,10 @@ def main() -> int:
     ap.add_argument("--intermediate", action="append", default=[], metavar="MODE=PATH", required=True,
                     help="MODE=s3://.../intermediate.csv, repeatable")
     ap.add_argument("--work-dir", default="/workspace/proteobench_stats")
+    ap.add_argument("--cache-dir", default=None,
+                    help="Where to stage the downloaded intermediate CSVs. Keep it outside "
+                         "--work-dir so the ~1.4GB inputs are not copied to the results "
+                         "destination alongside the statistics. Defaults to --work-dir.")
     ap.add_argument("--output-prefix", default="instanovo_v1_2_2_paired_stats")
     ap.add_argument("--n-boot", type=int, default=2000)
     ap.add_argument("--seed", type=int, default=20260813)
@@ -99,12 +106,14 @@ def main() -> int:
 
     work_dir = Path(args.work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir = Path(args.cache_dir) if args.cache_dir else work_dir
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
     indicators = {}
     for entry in args.intermediate:
         mode, _, source = entry.partition("=")
         mode, source = mode.strip(), source.strip()
-        local = fetch_predictions(source, work_dir / mode / "intermediate.csv")
+        local = fetch_predictions(source, cache_dir / mode / "intermediate.csv")
         ind = load_indicators(local)
         print(f"[{mode}] {len(ind):,} spectra", flush=True)
         for level in ("mass", "exact"):
