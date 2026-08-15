@@ -21,15 +21,16 @@ spec:
   image: proteobench-winnow-koina
   # AIchor runs spec.command as a shell command, which replaces the image
   # ENTRYPOINT, so Koina's start-and-wait wrapper is invoked explicitly here.
-  # Rescoring: calibrated confidence and FDR control for the model's own top-1.
-  # Same peptides as the submitted run; only the score changes.
+  # Reranking: score every beam as a candidate and keep the best per spectrum.
+  # This can change the predicted peptide, so precision and recall can move.
+  # One full scoring pass per beam, so runtime is roughly ten times a single run.
   command: >-
     /usr/local/bin/entrypoint.koina.sh
-    /usr/local/bin/run_predict.sh
+    /usr/local/bin/run_rerank.sh
     beam10
     s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/e3543482-6b63-4467-87ac-868cddd7ae04/instanovo_v1_2_2_metrics/runs/beam10/raw_predictions.csv
     s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/101107e7-222f-48b7-a504-c0f041ddb069/instanovo_v1_2_2_proteobench/data/nine_species_balanced_De_Novo.mgf
-    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/winnow_predict
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/winnow_rerank
   types:
     worker:
       count: 1
