@@ -38,14 +38,19 @@ KOINA_SSL="${KOINA_SSL:-false}"
 COLLISION_ENERGY="${COLLISION_ENERGY:-27}"
 FRAGMENTATION_TYPE="${FRAGMENTATION_TYPE:-HCD}"
 
+# The spectrum file's own name is load-bearing: winnow derives spectrum_id as
+# "<file stem>:<scan_number>" and joins predictions on it, so renaming the MGF on the
+# way in silently breaks the join against InstaNovo's "<experiment_name>:<scan>" ids.
+SPECTRA_FILENAME="$(basename "$SPECTRA_URI")"
+
 echo "[run_calibration] fetching inputs for $MODE"
 aws_s3 cp "$PREDICTIONS_URI" "$WORK_DIR/data/predictions.csv"
-aws_s3 cp "$SPECTRA_URI" "$WORK_DIR/data/spectra.mgf"
+aws_s3 cp "$SPECTRA_URI" "$WORK_DIR/data/$SPECTRA_FILENAME"
 
 echo "[run_calibration] diagnosing calibration for $MODE"
 winnow diagnose-calibration \
     diagnostics.label_source=sequence \
-    dataset.spectrum_path_or_directory="$WORK_DIR/data/spectra.mgf" \
+    dataset.spectrum_path_or_directory="$WORK_DIR/data/$SPECTRA_FILENAME" \
     dataset.predictions_path="$WORK_DIR/data/predictions.csv" \
     data_loader=instanovo \
     koina.server_url="$KOINA_SERVER_URL" \
