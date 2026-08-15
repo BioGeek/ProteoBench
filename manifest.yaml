@@ -36,8 +36,10 @@ spec:
       resources:
         # Triton needs a GPU for the Prosit models, and a larger shared-memory segment
         # than the default; a MIG slice is enough once MODEL_PATTERN limits the models.
+        # 779,879 spectra with ten beams each: the previous 8x8 request died with
+        # ArrowMemoryError on a 4.5GB allocation while building the feature table.
         cpus: 8
-        ramRatio: 8
+        ramRatio: 24
         accelerators:
           gpu:
             count: 1
