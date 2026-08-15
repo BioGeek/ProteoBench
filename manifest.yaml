@@ -12,7 +12,9 @@ kind: AIchorManifest
 apiVersion: 0.2.3
 builder:
   image: proteobench-winnow-koina
-  dockerfile: ./aichor/winnow_calibration/Dockerfile
+  # Both paths are resolved relative to `context`, so the dockerfile is named
+  # bare here; a repo-root-relative path would be appended to the context.
+  dockerfile: Dockerfile
   context: ./aichor/winnow_calibration
 spec:
   operator: jobset
