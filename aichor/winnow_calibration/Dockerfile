@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir \
         rdkit==2024.3.5
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl make && \
+    apt-get install -y --no-install-recommends ca-certificates curl make git && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # uv is not in the upstream Triton image.
@@ -38,9 +38,14 @@ RUN uv tool install awscli && aws --version
 # Winnow needs a newer Python than the Triton image's system one, so give it its own
 # interpreter and venv. Keep it off the system Python to avoid the Triton backend
 # picking up these packages.
+# Installed from a fork rather than PyPI: winnow-fdr 2.0.0 builds its Koina client as
+# `koinapy.Koina(model_name)` with no server argument, so it can only ever reach the
+# public endpoint. The fork adds `koina.server_url` / `koina.ssl`, which is what lets
+# the features talk to the Triton instance running beside them in this image.
+ARG WINNOW_SPEC="winnow-fdr @ git+https://github.com/BioGeek/winnow.git@feat/koina-server-url"
 ENV UV_PROJECT_ENVIRONMENT=/opt/winnow-venv UV_PYTHON=3.12
 RUN uv venv --python 3.12 /opt/winnow-venv && \
-    VIRTUAL_ENV=/opt/winnow-venv uv pip install --no-cache winnow-fdr
+    VIRTUAL_ENV=/opt/winnow-venv uv pip install --no-cache "${WINNOW_SPEC}"
 ENV PATH="/opt/winnow-venv/bin:$PATH"
 
 # Loading every Koina model (~50+) OOMs a MIG slice. This pattern keeps the two the
