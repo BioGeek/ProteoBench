@@ -60,7 +60,7 @@ def count_beams(df: pd.DataFrame) -> int:
     return max(indices) + 1 if indices else 0
 
 
-def split(predictions_path: Path, output_dir: Path, max_beams: int | None) -> None:
+def split(predictions_path: Path, output_dir: Path, max_beams: int | None, only_beam: int | None = None) -> None:
     """Write one candidate predictions file per beam."""
     df = pd.read_csv(predictions_path, low_memory=False)
     verify_tokeniser(df)
@@ -73,7 +73,10 @@ def split(predictions_path: Path, output_dir: Path, max_beams: int | None) -> No
     print(f"[beam_candidates] {len(df):,} rows, using {n_beams} beam(s)", flush=True)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    for k in range(n_beams):
+    # One beam at a time keeps peak disk at a single candidate rather than all of them;
+    # every candidate is nearly the size of the source file.
+    wanted = range(n_beams) if only_beam is None else [only_beam]
+    for k in wanted:
         sequence_col = BEAM_SEQUENCE.format(k=k)
         logprob_col = BEAM_LOGPROB.format(k=k)
         if sequence_col not in df.columns:
@@ -130,6 +133,8 @@ def main() -> int:
     p_split.add_argument("--predictions", type=Path, required=True)
     p_split.add_argument("--output-dir", type=Path, required=True)
     p_split.add_argument("--max-beams", type=int, default=None)
+    p_split.add_argument("--only-beam", type=int, default=None)
+    p_split.add_argument("--count-only", action="store_true")
 
     p_combine = sub.add_parser("combine")
     p_combine.add_argument("--scored-dir", type=Path, required=True)
@@ -138,7 +143,12 @@ def main() -> int:
 
     args = parser.parse_args()
     if args.command == "split":
-        split(args.predictions, args.output_dir, args.max_beams)
+        if args.count_only:
+            df = pd.read_csv(args.predictions, nrows=1)
+            n = count_beams(df)
+            print(min(n, args.max_beams) if args.max_beams else n)
+            return 0
+        split(args.predictions, args.output_dir, args.max_beams, args.only_beam)
     else:
         combine(args.scored_dir, args.output, args.confidence_column)
     return 0

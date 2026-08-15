@@ -41,22 +41,43 @@ echo "[run_rerank] fetching inputs for $MODE"
 aws_s3 cp "$PREDICTIONS_URI" "$WORK_DIR/data/predictions.csv"
 aws_s3 cp "$SPECTRA_URI" "$WORK_DIR/data/$SPECTRA_FILENAME"
 
-# Splitting first also verifies the tokeniser against InstaNovo's own output, so a
-# mismatch stops the run before any scoring time is spent.
-echo "[run_rerank] building per-beam candidates"
-python /usr/local/bin/beam_candidates.py split \
+# Every candidate is nearly the size of the source predictions, and each scoring pass
+# writes a metadata.csv of several GB, so materialising all beams at once fills the pod's
+# ephemeral storage and gets it evicted. Build, score, keep the small result, and delete
+# before moving to the next beam, so peak usage is one candidate plus one output.
+N_BEAMS=$(python /usr/local/bin/beam_candidates.py split \
     --predictions "$WORK_DIR/data/predictions.csv" \
     --output-dir "$WORK_DIR/candidates" \
     ${MAX_BEAMS:+--max-beams "$MAX_BEAMS"} \
-    2>&1 | tee "$WORK_DIR/results/split_${MODE}.log"
+    --count-only)
+echo "[run_rerank] scoring $N_BEAMS beam(s) one at a time"
 
-for candidate in "$WORK_DIR"/candidates/beam_*.csv; do
-    beam="$(basename "$candidate" .csv)"
+for k in $(seq 0 $((N_BEAMS - 1))); do
+    beam="beam_${k}"
+
+    # Beams already scored by an earlier attempt are reused rather than recomputed;
+    # each pass costs well over an hour, and the per-beam upload exists for this.
+    mkdir -p "$WORK_DIR/kept/$beam"
+    if aws_s3 cp "${OUTPUT_PREFIX%/}/$MODE/scored/$beam/preds_and_fdr_metrics.csv" \
+            "$WORK_DIR/kept/$beam/preds_and_fdr_metrics.csv" 2>/dev/null; then
+        echo "[run_rerank] $beam already scored; reusing"
+        continue
+    fi
+
+    echo "[run_rerank] building candidate $beam"
+    # The split also verifies the tokeniser against InstaNovo's own output, so a
+    # mismatch stops the run before any scoring time is spent.
+    python /usr/local/bin/beam_candidates.py split \
+        --predictions "$WORK_DIR/data/predictions.csv" \
+        --output-dir "$WORK_DIR/candidates" \
+        --only-beam "$k" \
+        2>&1 | tee -a "$WORK_DIR/results/split_${MODE}.log"
+
     echo "[run_rerank] scoring $beam"
     winnow predict \
         --config-dir "$WINNOW_CONFIG_DIR" \
         dataset.spectrum_path_or_directory="$WORK_DIR/data/$SPECTRA_FILENAME" \
-        dataset.predictions_path="$candidate" \
+        dataset.predictions_path="$WORK_DIR/candidates/$beam.csv" \
         data_loader=instanovo \
         koina.server_url="$KOINA_SERVER_URL" \
         koina.ssl="$KOINA_SSL" \
@@ -66,13 +87,19 @@ for candidate in "$WORK_DIR"/candidates/beam_*.csv; do
         output_folder="$WORK_DIR/scored/$beam" \
         2>&1 | tee "$WORK_DIR/results/predict_${beam}.log"
 
-    # Keep each beam's scores as they land, so a later failure does not cost the earlier ones.
-    aws_s3 cp "$WORK_DIR/scored/$beam/" "${OUTPUT_PREFIX%/}/$MODE/scored/$beam/" --recursive
+    # Only the per-PSM scores are needed downstream; metadata.csv is the multi-GB part.
+    mkdir -p "$WORK_DIR/kept/$beam"
+    cp "$WORK_DIR/scored/$beam/preds_and_fdr_metrics.csv" "$WORK_DIR/kept/$beam/"
+    aws_s3 cp "$WORK_DIR/kept/$beam/" "${OUTPUT_PREFIX%/}/$MODE/scored/$beam/" --recursive
+
+    rm -rf "$WORK_DIR/scored/$beam" "$WORK_DIR/candidates/$beam.csv"
+    echo "[run_rerank] $beam done; freed its candidate and metadata"
+    df -h "$WORK_DIR" | tail -1
 done
 
 echo "[run_rerank] choosing the winning candidate per spectrum"
 python /usr/local/bin/beam_candidates.py combine \
-    --scored-dir "$WORK_DIR/scored" \
+    --scored-dir "$WORK_DIR/kept" \
     --output "$WORK_DIR/results/reranked_${MODE}.csv" \
     --confidence-column "$CONFIDENCE_COLUMN" \
     2>&1 | tee "$WORK_DIR/results/combine_${MODE}.log"
