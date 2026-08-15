@@ -16,6 +16,17 @@ OUTPUT_PREFIX="${4:?s3:// prefix to write results to}"
 WORK_DIR="${WORK_DIR:-/tmp/winnow_${MODE}}"
 mkdir -p "$WORK_DIR/data" "$WORK_DIR/results"
 
+# The AWS CLI installed here is v1, which has no AWS_ENDPOINT_URL support, so the
+# object-storage endpoint has to be passed explicitly. Whitespace is stripped because
+# the value can arrive padded, which is silently fatal otherwise.
+S3_ENDPOINT="$(printf '%s' "${AWS_ENDPOINT_URL:-${AWS_ENDPOINT_URL_S3:-${S3_ENDPOINT:-}}}" | tr -d '[:space:]')"
+if [ -z "$S3_ENDPOINT" ]; then
+    echo "[run_calibration] no S3 endpoint in AWS_ENDPOINT_URL / AWS_ENDPOINT_URL_S3 / S3_ENDPOINT" >&2
+    exit 1
+fi
+echo "[run_calibration] using S3 endpoint: $S3_ENDPOINT"
+aws_s3() { aws --endpoint-url "$S3_ENDPOINT" s3 "$@"; }
+
 # The in-pod Triton speaks gRPC on 8500; TLS is for the public server only.
 KOINA_SERVER_URL="${KOINA_SERVER_URL:-localhost:8500}"
 KOINA_SSL="${KOINA_SSL:-false}"
@@ -28,8 +39,8 @@ COLLISION_ENERGY="${COLLISION_ENERGY:-27}"
 FRAGMENTATION_TYPE="${FRAGMENTATION_TYPE:-HCD}"
 
 echo "[run_calibration] fetching inputs for $MODE"
-aws s3 cp "$PREDICTIONS_URI" "$WORK_DIR/data/predictions.csv"
-aws s3 cp "$SPECTRA_URI" "$WORK_DIR/data/spectra.mgf"
+aws_s3 cp "$PREDICTIONS_URI" "$WORK_DIR/data/predictions.csv"
+aws_s3 cp "$SPECTRA_URI" "$WORK_DIR/data/spectra.mgf"
 
 echo "[run_calibration] diagnosing calibration for $MODE"
 winnow diagnose-calibration \
@@ -44,6 +55,6 @@ winnow diagnose-calibration \
     2>&1 | tee "$WORK_DIR/results/diagnose_${MODE}.log"
 
 echo "[run_calibration] uploading results for $MODE"
-aws s3 cp "$WORK_DIR/results/" "${OUTPUT_PREFIX%/}/$MODE/" --recursive
+aws_s3 cp "$WORK_DIR/results/" "${OUTPUT_PREFIX%/}/$MODE/" --recursive
 
 echo "[run_calibration] done: ${OUTPUT_PREFIX%/}/$MODE/"

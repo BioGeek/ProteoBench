@@ -1,35 +1,40 @@
+# Winnow calibration diagnostics for one InstaNovo inference mode, with Koina in-pod.
+#
+# `aichor experiments submit local` reads the manifest at the repository root, so copy
+# this over ./manifest.yaml (or submit by commit-sha with --manifest-path) to run it.
+#
+# Start with beam10: it is the only mode besides knapsack_beam10 whose predictions carry
+# the ten beam columns winnow's instanovo loader expects, so it exercises the full
+# feature set -- fragment match, iRT, beam, chimeric, token score, mass error. The modes
+# without beams need a column rename and lose the beam and chimeric features.
 # yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
 kind: AIchorManifest
 apiVersion: 0.2.3
 builder:
-  image: proteobench-instanovo-v1-2-2
-  dockerfile: ./aichor/instanovo_v1_2_2/Dockerfile
-  context: .
+  image: proteobench-winnow-koina
+  dockerfile: ./aichor/winnow_calibration/Dockerfile
+  context: ./aichor/winnow_calibration
 spec:
   operator: jobset
-  image: proteobench-instanovo-v1-2-2
-  # Paired significance tests across all seven inference modes. The earlier paired-stats
-  # run covered only greedy, greedy_refined, beam10 and beam10_refined; this adds the two
-  # knapsack modes and diffusion_only so every pair in the results table is tested.
-  # No GPU: this only streams two columns out of each mode's intermediate.csv.
+  image: proteobench-winnow-koina
   command: >-
-    cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
-    python paired_stats.py
-    --intermediate greedy=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/8b794fca-7218-4659-bc18-251bfde58a52/instanovo_v1_2_2_metrics/runs/greedy/intermediate.csv
-    --intermediate greedy_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/0c4467e7-c43a-4fe6-9a86-e44d8bc3552c/instanovo_v1_2_2_metrics/runs/greedy_refined/intermediate.csv
-    --intermediate beam10=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/e3543482-6b63-4467-87ac-868cddd7ae04/instanovo_v1_2_2_metrics/runs/beam10/intermediate.csv
-    --intermediate beam10_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/b1047c55-5075-413f-b8e6-19e53b1ff2a2/instanovo_v1_2_2_metrics/runs/beam10_refined/intermediate.csv
-    --intermediate knapsack_beam10=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/4670d80d-a3e8-4998-a97e-63eb6a933cb8/instanovo_v1_2_2_metrics/runs/knapsack_beam10/intermediate.csv
-    --intermediate knapsack_beam10_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/42638121-f931-49d1-b16f-81fb3abeda30/instanovo_v1_2_2_metrics/runs/knapsack_beam10_refined/intermediate.csv
-    --intermediate diffusion_only=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/013f843b-2624-4a80-8cee-ccaacc1a0342/instanovo_v1_2_2_diffusion_only/runs/diffusion_only/intermediate.csv
-    --work-dir /workspace/proteobench_paired_stats_all7
-    --cache-dir /workspace/paired_stats_cache
-    --output-prefix instanovo_v1_2_2_paired_stats_all7
+    /usr/local/bin/run_calibration.sh
+    beam10
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/e3543482-6b63-4467-87ac-868cddd7ae04/instanovo_v1_2_2_metrics/runs/beam10/raw_predictions.csv
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/101107e7-222f-48b7-a504-c0f041ddb069/instanovo_v1_2_2_proteobench/data/nine_species_balanced_De_Novo.mgf
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/winnow_calibration
   types:
     worker:
       count: 1
       completions: 1
       parallelisms: 1
       resources:
+        # Triton needs a GPU for the Prosit models, and a larger shared-memory segment
+        # than the default; a MIG slice is enough once MODEL_PATTERN limits the models.
         cpus: 8
-        ramRatio: 4
+        ramRatio: 8
+        accelerators:
+          gpu:
+            count: 1
+            type: gpu
+            product: NVIDIA-H100-80GB-HBM3-MIG-3g.40gb
