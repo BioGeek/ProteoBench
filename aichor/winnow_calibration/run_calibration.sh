@@ -47,6 +47,9 @@ echo "[run_calibration] fetching inputs for $MODE"
 aws_s3 cp "$PREDICTIONS_URI" "$WORK_DIR/data/predictions.csv"
 aws_s3 cp "$SPECTRA_URI" "$WORK_DIR/data/$SPECTRA_FILENAME"
 
+# diagnostics.output_dir defaults to a path relative to the working directory, so the
+# reliability diagram lands outside the tree this script uploads and is lost with the
+# container. Point it inside the staged results instead.
 echo "[run_calibration] diagnosing calibration for $MODE"
 WINNOW_CONFIG_DIR="${WINNOW_CONFIG_DIR:-/opt/winnow-configs}"
 
@@ -60,6 +63,7 @@ winnow diagnose-calibration \
     koina.ssl="$KOINA_SSL" \
     koina.input_constants.collision_energies="$COLLISION_ENERGY" \
     koina.input_constants.fragmentation_types="$FRAGMENTATION_TYPE" \
+    diagnostics.output_dir="$WORK_DIR/results/calibration_diagnostic" \
     2>&1 | tee "$WORK_DIR/results/diagnose_${MODE}.log"
 
 echo "[run_calibration] uploading results for $MODE"
