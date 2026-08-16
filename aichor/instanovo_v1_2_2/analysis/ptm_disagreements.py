@@ -26,8 +26,9 @@ from pathlib import Path
 import pandas as pd
 
 DATA = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
-# beam10's outcome comes from the ground-truth extract; these are the modes with a
-# prediction column of their own.
+# All seven modes take part in the consensus. beam10's verdict lives in the ground-truth
+# extract while its predicted peptide is in mode_beam10.csv, so it is assembled separately
+# below rather than being merely required to be wrong.
 MODES = ["greedy", "greedy_refined", "diffusion_only", "beam10_refined",
          "knapsack_beam10", "knapsack_beam10_refined"]
 
@@ -84,6 +85,20 @@ def classify(delta: float, tolerance: float = 0.01) -> str:
     return "other"
 
 
+def aligned(frame, reference, name: str):
+    """Return `frame` only if its rows line up with `reference`.
+
+    Several analyses below assign columns positionally across separately-read files,
+    which is only valid if every file carries the same spectra in the same order. The
+    marginal precision checks cannot catch a violation -- a permutation leaves a mean
+    unchanged -- so the assumption is asserted here rather than trusted.
+    """
+    if len(frame) != len(reference) or not frame["spectrum_id"].reset_index(drop=True).equals(
+            reference.reset_index(drop=True)):
+        raise SystemExit(f"{name} is not row-aligned with the reference; a keyed merge is needed")
+    return frame
+
+
 gt = pd.read_csv(DATA / "gt_beam10.csv")
 df = pd.DataFrame({
     "spectrum_id": gt["spectrum_id"],
@@ -92,23 +107,28 @@ df = pd.DataFrame({
     "beam10_match": gt["match_type"],
 })
 for mode in MODES:
-    frame = pd.read_csv(DATA / f"mode_{mode}.csv",
-                        usecols=["spectrum_id", "match_type", "peptidoform"])
+    frame = aligned(pd.read_csv(DATA / f"mode_{mode}.csv",
+                                usecols=["spectrum_id", "match_type", "peptidoform"]),
+                    gt["spectrum_id"], f"mode_{mode}.csv")
     df[f"{mode}_pred"] = frame["peptidoform"].values
     df[f"{mode}_ok"] = frame["match_type"].isin(["exact", "mass"]).values
 
-every_mode_wrong = (~df[[f"{m}_ok" for m in MODES]].any(axis=1)
-                    & ~df["beam10_match"].isin(["exact", "mass"]))
+beam10 = aligned(pd.read_csv(DATA / "mode_beam10.csv"), gt["spectrum_id"], "mode_beam10.csv")
+df["beam10_pred"] = beam10["peptidoform"].values
+df["beam10_ok"] = gt["match_type"].isin(["exact", "mass"]).values
+ALL_MODES = MODES + ["beam10"]
+
+every_mode_wrong = ~df[[f"{m}_ok" for m in ALL_MODES]].any(axis=1)
 df = df[every_mode_wrong]
 print(f"spectra where every mode is wrong: {len(df):,}")
 
-prediction_columns = [f"{m}_pred" for m in MODES]
+prediction_columns = [f"{m}_pred" for m in ALL_MODES]
 normalised = df[prediction_columns].apply(
     lambda column: column.astype(str).str.replace("-", "", regex=False))
 unanimous = normalised.nunique(axis=1) == 1
 df = df[unanimous].copy()
 df["agreed"] = normalised.loc[unanimous.index[unanimous], prediction_columns[0]]
-print(f"...and all six agree on the same peptide: {len(df):,}")
+print(f"...and all seven agree on the same peptide: {len(df):,}")
 
 same_backbone = [backbone(t) == backbone(a) for t, a in zip(df["truth"], df["agreed"])]
 df = df[same_backbone].copy()

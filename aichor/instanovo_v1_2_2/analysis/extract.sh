@@ -52,6 +52,12 @@ cols=['spectrum_id','peptide_length','missing_frag_pct','explained_all_pct','exp
 pd.concat(list(pd.read_csv(sys.stdin, usecols=cols, chunksize=200000, low_memory=False))).to_csv('$OUT/spectrum_features.csv', index=False)
 "
 
+echo "[extract] beam10's own predicted peptides"
+s3_stream "$BEAM10_INTERMEDIATE" | $PY -c "
+import sys, pandas as pd
+pd.concat(list(pd.read_csv(sys.stdin, usecols=['spectrum_id','peptidoform'], chunksize=200000, low_memory=False))).to_csv('$OUT/mode_beam10.csv', index=False)
+"
+
 echo "[extract] per-spectrum outcomes for the other six modes"
 printf '%s\n' "$MODES" | while read -r mode key; do
     [ -z "$mode" ] && continue

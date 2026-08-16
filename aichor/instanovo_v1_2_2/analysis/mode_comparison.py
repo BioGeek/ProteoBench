@@ -28,13 +28,28 @@ MAMMALS = {"H.-sapiens", "Mus-musculus"}
 # ProteoBench counts a peptide correct at "mass" level when the match is exact or mass-equivalent.
 CORRECT_TYPES = ["exact", "mass"]
 
+def aligned(frame, reference, name: str):
+    """Return `frame` only if its rows line up with `reference`.
+
+    Several analyses below assign columns positionally across separately-read files,
+    which is only valid if every file carries the same spectra in the same order. The
+    marginal precision checks cannot catch a violation -- a permutation leaves a mean
+    unchanged -- so the assumption is asserted here rather than trusted.
+    """
+    if len(frame) != len(reference) or not frame["spectrum_id"].reset_index(drop=True).equals(
+            reference.reset_index(drop=True)):
+        raise SystemExit(f"{name} is not row-aligned with the reference; a keyed merge is needed")
+    return frame
+
+
 gt = pd.read_csv(DATA / "gt_beam10.csv")
 outcome = pd.DataFrame({"spectrum_id": gt["spectrum_id"], "collection": gt["collection"]})
 outcome["beam10"] = gt["match_type"].isin(CORRECT_TYPES).values
 for mode in MODES:
     if mode == "beam10":
         continue
-    frame = pd.read_csv(DATA / f"mode_{mode}.csv", usecols=["spectrum_id", "match_type"])
+    frame = aligned(pd.read_csv(DATA / f"mode_{mode}.csv", usecols=["spectrum_id", "match_type"]),
+                    gt["spectrum_id"], f"mode_{mode}.csv")
     outcome[mode] = frame["match_type"].isin(CORRECT_TYPES).values
 
 print("per-mode peptide/mass precision (should match the published table)")

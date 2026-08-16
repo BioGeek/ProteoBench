@@ -38,9 +38,24 @@ MAMMALS = {"H.-sapiens", "Mus-musculus"}
 # test side spans kingdoms rather than being a random slice of one distribution.
 HELD_OUT = {"H.-sapiens", "Methanosarcina-mazei", "Solanum-lycopersicum", "Candidatus-endoloripes"}
 
+def aligned(frame, reference, name: str):
+    """Return `frame` only if its rows line up with `reference`.
+
+    Several analyses below assign columns positionally across separately-read files,
+    which is only valid if every file carries the same spectra in the same order. The
+    marginal precision checks cannot catch a violation -- a permutation leaves a mean
+    unchanged -- so the assumption is asserted here rather than trusted.
+    """
+    if len(frame) != len(reference) or not frame["spectrum_id"].reset_index(drop=True).equals(
+            reference.reset_index(drop=True)):
+        raise SystemExit(f"{name} is not row-aligned with the reference; a keyed merge is needed")
+    return frame
+
+
 gt = pd.read_csv(DATA / "gt_beam10.csv")
-refined = pd.read_csv(DATA / "mode_beam10_refined.csv", usecols=["spectrum_id", "match_type"])
-predicted = pd.read_csv(DATA / "mode_beam10.csv")
+refined = aligned(pd.read_csv(DATA / "mode_beam10_refined.csv", usecols=["spectrum_id", "match_type"]),
+                  gt["spectrum_id"], "mode_beam10_refined.csv")
+predicted = aligned(pd.read_csv(DATA / "mode_beam10.csv"), gt["spectrum_id"], "mode_beam10.csv")
 logprobs = pd.read_csv(DATA / "logprobs_beam10.csv")
 spectra = pd.read_csv(DATA / "spectrum_features.csv", usecols=["spectrum_id", "precursor_mz"])
 
