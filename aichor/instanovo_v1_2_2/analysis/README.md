@@ -97,7 +97,20 @@ uv run --no-project --with pandas --with numpy --with scikit-learn python \
 Trains on five species and evaluates on four held out, so the reported gain is
 cross-organism. Features are restricted to what is knowable at inference.
 
-## 7. Modification disagreements
+## 7. Repeatability as an abstention signal
+
+The stochastic modes give a different answer on repeated runs. This asks whether that
+disagreement predicts incorrectness, which would make it a quality filter needing no
+labels and no model change.
+
+```bash
+$RUN stability.py ~/analysis-scratch diffusion_only
+$RUN stability.py ~/analysis-scratch greedy_refined
+```
+
+Needs the replicate extracts (`rep_<mode>_rep{1,2,3}.csv`) alongside the primary run.
+
+## 8. Modification disagreements
 
 Spectra where every mode is wrong, all agree on the same peptide, and that peptide has an
 identical backbone to the label — so only the modification state differs.
