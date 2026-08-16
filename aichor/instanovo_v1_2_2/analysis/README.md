@@ -71,7 +71,20 @@ over-confidence varies by species, and which features carry the signal.
 $RUN winnow_analysis.py ~/analysis-scratch
 ```
 
-## 5. Modification disagreements
+## 5. Should refinement be gated?
+
+Refinement helps overall but hurts mammals and long peptides. This evaluates per-spectrum
+rules for when to apply it, using outcomes both models already produced -- no new inference.
+
+```bash
+$RUN refinement_gating.py ~/analysis-scratch
+```
+
+Rules are split into deployable ones (using only what is known at inference: the predicted
+peptide, the model's log-probability, the organism sampled) and bounds marked `[bound]`
+that read the ground truth and say what a rule built on that quantity could reach.
+
+## 6. Modification disagreements
 
 Spectra where every mode is wrong, all agree on the same peptide, and that peptide has an
 identical backbone to the label — so only the modification state differs.
