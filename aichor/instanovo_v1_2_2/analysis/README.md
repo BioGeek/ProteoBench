@@ -110,7 +110,27 @@ $RUN stability.py ~/analysis-scratch greedy_refined
 
 Needs the replicate extracts (`rep_<mode>_rep{1,2,3}.csv`) alongside the primary run.
 
-## 8. Modification disagreements
+## 8. Is the bottleneck search or the candidate set?
+
+Splits every spectrum into top-1 correct / label present but misranked / label absent, and
+stratifies it. Decides whether a wider beam is worth GPU.
+
+```bash
+aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "s3://.../beam10/raw_predictions.csv" - \
+  | $RUN beam_failure.py ~/analysis-scratch /dev/stdin
+```
+
+## 9. Error provenance, and whether the mammal penalty survives matching
+
+```bash
+$RUN error_provenance.py ~/analysis-scratch
+```
+
+Reports what share of each mode's wrong answers are still real peptides of that species,
+and re-estimates the mammalian refinement penalty standardised to the non-mammalian
+spectrum mix, with a bootstrap interval.
+
+## 10. Modification disagreements
 
 Spectra where every mode is wrong, all agree on the same peptide, and that peptide has an
 identical backbone to the label — so only the modification state differs.
