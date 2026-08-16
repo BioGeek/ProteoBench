@@ -84,7 +84,20 @@ Rules are split into deployable ones (using only what is known at inference: the
 peptide, the model's log-probability, the organism sampled) and bounds marked `[bound]`
 that read the ground truth and say what a rule built on that quantity could reach.
 
-## 6. Modification disagreements
+## 6. Learn when refinement helps
+
+The hand-written gates in step 5 capture little of what is available. This trains a
+classifier on the ~2% of spectra where refinement changes the outcome, and gates on it.
+
+```bash
+uv run --no-project --with pandas --with numpy --with scikit-learn python \
+    refinement_predictor.py ~/analysis-scratch
+```
+
+Trains on five species and evaluates on four held out, so the reported gain is
+cross-organism. Features are restricted to what is knowable at inference.
+
+## 7. Modification disagreements
 
 Spectra where every mode is wrong, all agree on the same peptide, and that peptide has an
 identical backbone to the label — so only the modification state differs.
