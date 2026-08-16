@@ -1,0 +1,51 @@
+# Winnow calibration diagnostics for one InstaNovo inference mode, with Koina in-pod.
+#
+# `aichor experiments submit local` reads the manifest at the repository root, so copy
+# this over ./manifest.yaml (or submit by commit-sha with --manifest-path) to run it.
+#
+# Start with beam10: it is the only mode besides knapsack_beam10 whose predictions carry
+# the ten beam columns winnow's instanovo loader expects, so it exercises the full
+# feature set -- fragment match, iRT, beam, chimeric, token score, mass error. The modes
+# without beams need a column rename and lose the beam and chimeric features.
+# yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
+kind: AIchorManifest
+apiVersion: 0.2.3
+builder:
+  image: proteobench-winnow-koina
+  # Both paths are resolved relative to `context`, so the dockerfile is named
+  # bare here; a repo-root-relative path would be appended to the context.
+  dockerfile: Dockerfile
+  context: ./aichor/winnow_calibration
+spec:
+  operator: jobset
+  image: proteobench-winnow-koina
+  # AIchor runs spec.command as a shell command, which replaces the image
+  # ENTRYPOINT, so Koina's start-and-wait wrapper is invoked explicitly here.
+  # Full-coverage rescoring: fdr_threshold=1.0 accepts every scored PSM, so the export
+  # includes the rejected tail. The 5% run exported only accepted rows, which made any
+  # ranking or calibration claim conditional on a subset selected by the score itself.
+  command: >-
+    FDR_THRESHOLD=1.0
+    /usr/local/bin/entrypoint.koina.sh
+    /usr/local/bin/run_predict.sh
+    beam10
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/e3543482-6b63-4467-87ac-868cddd7ae04/instanovo_v1_2_2_metrics/runs/beam10/raw_predictions.csv
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/101107e7-222f-48b7-a504-c0f041ddb069/instanovo_v1_2_2_proteobench/data/nine_species_balanced_De_Novo.mgf
+    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/winnow_predict_full
+  types:
+    worker:
+      count: 1
+      completions: 1
+      parallelisms: 1
+      resources:
+        # Triton needs a GPU for the Prosit models, and a larger shared-memory segment
+        # than the default; a MIG slice is enough once MODEL_PATTERN limits the models.
+        # 779,879 spectra with ten beams each: the previous 8x8 request died with
+        # ArrowMemoryError on a 4.5GB allocation while building the feature table.
+        cpus: 8
+        ramRatio: 24
+        accelerators:
+          gpu:
+            count: 1
+            type: gpu
+            product: NVIDIA-H100-80GB-HBM3-MIG-3g.40gb
