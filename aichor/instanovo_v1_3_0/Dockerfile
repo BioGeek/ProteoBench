@@ -25,9 +25,11 @@ COPY . /workspace/ProteoBench
 # can load the v1.3 checkpoints: PyPI tops out at 1.2.2, and these are internal training
 # artefacts (experiments 33768d55 and 8d0443f2) with a 133-residue vocabulary.
 #
-#   built from: InstaNovo-internal test/v1-3-133res-inference @ fdd7c7d3300b (clean tree)
-#   sha256:     b14569c108471cc01e164c7a400adbfcef0143563d13044d6627577c65c1b0b1
-#   archived:   s3://dtu-denovo-s-2e6da747d6d34f62-inputs/wheels/instanovo-1.3.0-fdd7c7d3300b/
+#   built from: InstaNovo-internal test/v1-3-133res-inference @ 03a876d414f0 (clean tree)
+#   sha256:     6747cb796f8a49ceae1772edfb8f34d87c8646350ea326a1f05662ba35f7e1df
+#   archived:   s3://dtu-denovo-s-2e6da747d6d34f62-inputs/wheels/instanovo-1.3.0-03a876d414f0/
+#   ships 45 config files, including configs/residues/extended.yaml (the 133-residue
+#   vocabulary the checkpoints were trained on)
 #
 # Vendored rather than fetched from the bucket because this install runs at BUILD time, and the
 # image build has no bucket credentials. The bucket copy is the canonical archive; the two are

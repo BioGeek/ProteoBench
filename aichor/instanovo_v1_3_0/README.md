@@ -41,10 +41,11 @@ So the image installs a wheel built from the internal repo and vendored into `wh
 
 | | |
 | --- | --- |
-| Built from | `InstaNovo-internal` `test/v1-3-133res-inference` @ **`fdd7c7d3300b`**, clean tree |
+| Built from | `InstaNovo-internal` `test/v1-3-133res-inference` @ **`03a876d414f0`**, clean tree |
 | Wheel | `instanovo-1.3.0-py3-none-any.whl`, 200 KB, pure Python |
-| sha256 | `b14569c108471cc01e164c7a400adbfcef0143563d13044d6627577c65c1b0b1` |
-| Archived at | `s3://dtu-denovo-s-2e6da747d6d34f62-inputs/wheels/instanovo-1.3.0-fdd7c7d3300b/` |
+| sha256 | `6747cb796f8a49ceae1772edfb8f34d87c8646350ea326a1f05662ba35f7e1df` |
+| Archived at | `s3://dtu-denovo-s-2e6da747d6d34f62-inputs/wheels/instanovo-1.3.0-03a876d414f0/` |
+| Config files | 45, including `configs/residues/extended.yaml` (133 residues) |
 
 It is **vendored rather than fetched from the bucket** because the install runs at *build* time
 and the image build has no bucket credentials. The bucket copy is the canonical archive; the two
@@ -59,37 +60,34 @@ wheel ships **31**. `[tool.setuptools.package-data]` listed `configs/*.yaml`, wh
 level only, so every config *group* was silently dropped — `inference/`, `residues/`,
 `dataset/`, `model/`, `accelerate/`, `finetune/`. Such a wheel installs and imports cleanly and
 then fails at run time when Hydra cannot find `configs/inference/default.yaml`. Fixed on the
-internal branch in `fdd7c7d3300b` by adding `configs/**/*.yaml`; the wheel now ships **44**
+internal branch in `fdd7c7d3300b` by adding `configs/**/*.yaml`; the wheel now ships **45**
 config files, including all fourteen `v1_3_133res_*` inference configs.
 
-### Where the 133 residues live, and why they are not in this wheel
+### The 133-residue vocabulary is in the wheel
 
-The 133-residue set **is** a config file — `instanovo/configs/residues/extended.yaml`, whose
-own header calls it "the residue set the v1.3.0 pretrained transformer checkpoint was trained
-on". But it lives on the **training** branch `train-instanovoplus-1-3-133`, not on
-`test/v1-3-133res-inference`, so it is absent from this wheel. The inference branch's residues
-group holds 32 (`default`), 104 (`pride_extended`) and 5 (`unit_test`) entries.
+`instanovo/configs/residues/extended.yaml` — 133 residues, 136 with PAD/SOS/EOS, described by
+its own header as "the residue set the v1.3.0 pretrained transformer checkpoint was trained
+on" — originally existed only on the **training** branch `train-instanovoplus-1-3-133`. It has
+been cherry-picked verbatim onto `test/v1-3-133res-inference`, so the wheel now carries it
+alongside `default` (32), `pride_extended` (104) and `unit_test` (5).
 
-It is selected as a Hydra override at training time, in `aichor_manifests/instanovoplus_4gpu.yaml`:
+**Strictly it is not needed for inference.** The vocabulary comes from the checkpoint, and
+nothing in the inference config chain selects a residues group — which is why internal runs
+`4cc23918` (greedy), `3f3b282e` (knapsack beam-5) and `9aeb6891` (greedy + refinement, so
+InstaNovo+ too) all loaded these checkpoints from a tree without the file. It is included so
+the artefact is self-describing, and so a run that *does* pass `residues=extended` resolves
+rather than failing. `extended.yaml` says it was "generated to EXACTLY match the v2 extended
+vocab … for a fair v1.3-vs-v2 comparison", and that comparison is exactly such a run.
+
+For reference, the override at training time was:
 
 ```
 instanovo/cli.py diffusion train residues=extended dataset=extended_v13 model.vocab_size=136
 ```
 
-(133 residues + PAD/SOS/EOS = 136.) **Inference resolves the vocabulary from the checkpoint
-instead**, which is why its absence is not a problem here: internal runs `4cc23918` (greedy),
-`3f3b282e` (knapsack beam-5) and `9aeb6891` (greedy + refinement, so InstaNovo+ as well) all
-loaded these checkpoints with exactly this code and no `extended.yaml` present.
-
-What the inference branch contributes is the inference-side handling —
-`v1_3_133res_common.yaml`'s 35-entry `suppressed_residues` list and 7 extra `residue_remapping`
-entries — and those *are* in the wheel.
-
-**When this wheel would need rebuilding:** any run that passes `residues=extended` explicitly,
-because the group would not resolve. That is not the sweep, but `extended.yaml` says it was
-"generated to EXACTLY match the v2 extended vocab … for a fair v1.3-vs-v2 comparison", so a
-planned v1.3-vs-v2 run is exactly the case that would need a wheel built from a branch carrying
-it — either `train-instanovoplus-1-3-133` or the file cherry-picked onto the inference branch.
+Note the file's own instruction to keep it in sync with the v2 copy at
+`libs/instanovo-core/.../residues/extended.yaml`; this vendored wheel is now a third copy, so
+treat the training branch as the source of truth if they ever diverge.
 
 ### Two consequences of leaving 1.2.2 behind
 
