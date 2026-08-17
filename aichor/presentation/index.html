@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InstaNovo on two benchmarks</title>
+<link rel="stylesheet" href="vendor/reveal.css">
+<link rel="stylesheet" href="vendor/white.css" id="theme">
+<style>
+:root{color-scheme:light;
+ --surface-1:#fcfcfb; --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#8a8985;
+ --grid:#e6e5e1; --series-1:#2a78d6; --series-2:#eb6834;
+ --diverge-warm:#e34948; --diverge-cool:#2a78d6; --best:#f4f8fd;}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+ color-scheme:dark; --surface-1:#1a1a19; --text-primary:#ffffff; --text-secondary:#c3c2b7;
+ --text-muted:#8a8985; --grid:#383835; --series-1:#3987e5; --series-2:#d95926;
+ --diverge-warm:#e66767; --diverge-cool:#3987e5; --best:#22262b;}}
+:root[data-theme="dark"]{color-scheme:dark; --surface-1:#1a1a19; --text-primary:#ffffff;
+ --text-secondary:#c3c2b7; --text-muted:#8a8985; --grid:#383835; --series-1:#3987e5;
+ --series-2:#d95926; --diverge-warm:#e66767; --diverge-cool:#3987e5; --best:#22262b;}
+
+.reveal{--r-main-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+ font-family:var(--r-main-font); color:var(--text-primary);}
+.reveal-viewport{background:var(--surface-1);}
+.reveal .slides{text-align:left;}
+.reveal h1{font-size:1.9em; letter-spacing:-.02em; margin-bottom:.4em;}
+.reveal h2{font-size:1.18em; letter-spacing:-.015em; margin:0 0 .7em; color:var(--text-primary); text-transform:none;}
+.reveal h3{font-size:.8em; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary); margin:0 0 .5em;}
+.reveal p,.reveal li{font-size:.62em; line-height:1.45; color:var(--text-primary);}
+.reveal .lede{font-size:.78em; color:var(--text-primary); margin-bottom:.5em;}
+.reveal .sub{font-size:.58em; color:var(--text-secondary);}
+.reveal .muted{color:var(--text-muted);}
+.reveal .note{font-size:.5em; color:var(--text-secondary); line-height:1.5; margin-top:.7em;}
+.reveal .note.warn{border-left:3px solid var(--diverge-warm); padding-left:.7em;}
+.reveal .callout{font-size:.62em; background:var(--best); border-left:3px solid var(--series-1);
+ padding:.6em .8em; border-radius:4px;}
+.reveal code{font-size:.92em; background:var(--best); padding:.05em .3em; border-radius:3px;}
+.two-col{display:grid; grid-template-columns:1fr 1fr; gap:1.6em; align-items:start;}
+.reveal ul{margin-left:1em;} .reveal li{margin-bottom:.4em;}
+
+table.data,table.matrix{border-collapse:collapse; width:100%; font-size:.46em; margin:0;}
+table.data th,table.data td{padding:.42em .5em; text-align:right; border-bottom:1px solid var(--grid);}
+table.data th{color:var(--text-secondary); font-weight:600; text-align:right; white-space:nowrap;}
+table.data td.mode,table.data th:first-child{text-align:left;}
+table.data tr.best{background:var(--best);}
+table.data tr.best td{font-weight:700;}
+table.data td.best-cell{font-weight:700;}
+table.data td.na,table.matrix td.na{color:var(--text-muted);}
+table.data.compact{width:auto;} table.data.compact th{text-align:left;}
+table.matrix{font-size:.44em; text-align:center;}
+table.matrix th{padding:.4em .3em; color:var(--text-secondary); font-weight:600; font-size:.92em;}
+table.matrix th.rowhead{text-align:left; white-space:nowrap; color:var(--text-primary);}
+table.matrix td{padding:.4em .3em; font-size:1.3em; border-bottom:1px solid var(--grid);}
+.st-done{color:var(--series-1);} .st-scoring{color:var(--series-2);}
+.st-running{color:var(--series-2); opacity:.75;} .st-planned{color:var(--text-muted);}
+.dot{display:inline-block; width:.6em; height:.6em; border-radius:50%; margin-right:.4em;}
+
+.legend{display:flex; gap:1.2em; flex-wrap:wrap; margin:.2em 0 .5em; font-size:.46em;
+ color:var(--text-secondary);}
+.legend .key{display:inline-flex; align-items:center; gap:.4em;}
+.legend .key i{width:.85em; height:.85em; border-radius:3px; display:inline-block;}
+.legend .key b{font-size:1.2em; line-height:1;}
+
+svg.chart{display:block; max-width:100%; height:auto;}
+svg.chart .tick{font-size:12px; fill:var(--text-secondary);}
+svg.chart .tick.strong{fill:var(--text-primary); font-weight:600;}
+svg.chart .tick .src{fill:var(--text-muted); font-weight:400;}
+svg.chart .axis-title{font-size:12px; fill:var(--text-secondary); font-weight:600;}
+svg.chart .bar-label{font-size:12px; fill:var(--text-primary); font-weight:600;}
+svg.chart .pt-label{font-size:12.5px; fill:var(--text-primary);}
+svg.chart .pt-label.emph{font-weight:700;}
+</style>
+</head>
+<body>
+<div class="reveal"><div class="slides">
+<section>
+<h1>InstaNovo on two benchmarks</h1>
+<p class="lede">v1.2.2 and v1.3.0, seven decoding modes, and what the confidence scores are worth</p>
+<p class="sub">ProteoBench nine-species balanced &middot; 17 internal held-out sets &middot; Winnow calibration<br>
+<span class="muted">Status as of 2026-08-17. Several runs are still in flight; every such number is marked.</span></p>
+</section>
+<section>
+<h2>What is being compared</h2>
+<p class="lede">Two checkpoints &times; two benchmarks &times; the decoding modes that matter.</p>
+<table class='matrix'><tr><th></th><th>greedy</th><th>beam5</th><th>beam10</th><th>knapsack_beam5</th><th>greedy+ref</th><th>beam5+ref</th><th>beam10+ref</th><th>knapsack+ref</th><th>diffusion_only</th></tr><tr><th class='rowhead'>ProteoBench &middot; v1.2.2</th><td class="st-done" title="complete">●</td><td class="na">—</td><td class="st-done" title="complete">●</td><td class="na">—</td><td class="st-done" title="complete">●</td><td class="na">—</td><td class="st-done" title="complete">●</td><td class="st-done" title="complete">●</td><td class="st-done" title="complete">●</td></tr><tr><th class='rowhead'>ProteoBench &middot; v1.3.0</th><td class="st-done" title="complete">●</td><td class="na">—</td><td class="st-running" title="running">◑</td><td class="na">—</td><td class="st-running" title="running">◑</td><td class="na">—</td><td class="st-running" title="running">◑</td><td class="st-running" title="running">◑</td><td class="st-running" title="running">◑</td></tr><tr><th class='rowhead'>Internal &middot; v1.3</th><td class="st-done" title="complete">●</td><td class="st-scoring" title="run complete, scoring">◐</td><td class="st-running" title="running">◑</td><td class="st-done" title="complete">●</td><td class="st-done" title="complete">●</td><td class="st-running" title="running">◑</td><td class="st-planned" title="planned">○</td><td class="st-done" title="complete">●</td><td class="st-scoring" title="run complete, scoring">◐</td></tr><tr><th class='rowhead'>Internal &middot; v1.2.2</th><td class="st-done" title="complete">●</td><td class="st-scoring" title="run complete, scoring">◐</td><td class="st-running" title="running">◑</td><td class="st-planned" title="planned">○</td><td class="st-planned" title="planned">○</td><td class="st-running" title="running">◑</td><td class="st-planned" title="planned">○</td><td class="st-planned" title="planned">○</td><td class="st-done" title="complete">●</td></tr></table><div class='legend'><span class="key"><b class="st-done">●</b>complete</span> <span class="key"><b class="st-scoring">◐</b>run complete, scoring</span> <span class="key"><b class="st-running">◑</b>running</span> <span class="key"><b class="st-planned">○</b>planned</span></div><p class='note'>ProteoBench has no beam-5 or knapsack beam-5 mode and the internal sets have no beam-10 knapsack run, so the dashes are by design, not gaps.</p>
+<p class="note">The v1.2.2 arm on ProteoBench is complete and is the reference everything else is read
+against. The v1.3.0 arm on the same data is one mode in. Internally, both checkpoints share one
+harness and one dataset list so only the weights vary.</p>
+</section>
+<section>
+<h2>Decoding choice moves accuracy more than anything else</h2>
+<table class='data'><tr><th>Mode</th><th>pep/mass</th><th>pep/exact</th><th>exact+IL</th><th>aa/mass</th><th>pep AUC</th><th>GPU</th></tr><tr class=''><td class='mode'>greedy (1 beam)</td><td>0.6946</td><td>0.4045</td><td>0.6749</td><td>0.8335</td><td>0.9177</td><td class='num'>1.5 h</td></tr><tr class=''><td class='mode'>beam search (10)</td><td>0.7278</td><td>0.4222</td><td>0.7068</td><td>0.8608</td><td>0.9220</td><td class='num'>10.17 h</td></tr><tr class=''><td class='mode'>knapsack beam (10)</td><td>0.7283</td><td>0.4223</td><td>0.7072</td><td>0.8550</td><td>0.9234</td><td class='num'>25.4 h</td></tr><tr class=''><td class='mode'>InstaNovo+ diffusion only</td><td>0.7142</td><td>0.4205</td><td>0.6946</td><td>0.8658</td><td>0.9109</td><td class='num'>2.8 h</td></tr><tr class=''><td class='mode'>greedy + refinement</td><td>0.6964</td><td>0.4123</td><td>0.6776</td><td>0.8390</td><td>0.8812</td><td class='num'>2.88 h</td></tr><tr class=''><td class='mode'>beam (10) + refinement</td><td>0.7317</td><td>0.4438</td><td>0.7140</td><td>0.8639</td><td>0.9257</td><td class='num'>20.8 h</td></tr><tr class='best'><td class='mode'>knapsack beam (10) + refinement</td><td>0.7321</td><td>0.4437</td><td>0.7142</td><td>0.8621</td><td>0.9260</td><td class='num'>35.83 h</td></tr></table>
+<p class="note">ProteoBench nine-species balanced, 779,879 spectra, InstaNovo v1.2.2. Refined modes are
+<b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally.</p>
+</section>
+<section>
+<h2>...but the last increments cost the most</h2>
+<svg viewBox="0 0 900 430" width="100%" role="img" aria-label="Peptide mass-match precision against GPU hours for seven decoding modes" class="chart"><line x1="70" y1="345.8" x2="600" y2="345.8" stroke="var(--grid)" stroke-width="1"/><text x="60" y="349.8" text-anchor="end" class="tick">0.69</text><line x1="70" y1="281.5" x2="600" y2="281.5" stroke="var(--grid)" stroke-width="1"/><text x="60" y="285.5" text-anchor="end" class="tick">0.70</text><line x1="70" y1="217.1" x2="600" y2="217.1" stroke="var(--grid)" stroke-width="1"/><text x="60" y="221.1" text-anchor="end" class="tick">0.71</text><line x1="70" y1="152.7" x2="600" y2="152.7" stroke="var(--grid)" stroke-width="1"/><text x="60" y="156.7" text-anchor="end" class="tick">0.72</text><line x1="70" y1="88.4" x2="600" y2="88.4" stroke="var(--grid)" stroke-width="1"/><text x="60" y="92.4" text-anchor="end" class="tick">0.73</text><line x1="70" y1="24.0" x2="600" y2="24.0" stroke="var(--grid)" stroke-width="1"/><text x="60" y="28.0" text-anchor="end" class="tick">0.74</text><text x="70.0" y="400" text-anchor="middle" class="tick">0</text><text x="209.5" y="400" text-anchor="middle" class="tick">10</text><text x="348.9" y="400" text-anchor="middle" class="tick">20</text><text x="488.4" y="400" text-anchor="middle" class="tick">30</text><line x1="70" y1="378" x2="600" y2="378" stroke="var(--grid)" stroke-width="1"/><polyline points="90.9,316.2 109.1,190.1 211.8,102.5 360.1,77.4 569.7,74.8" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-dasharray="5 4" opacity="0.5"/><circle cx="90.9" cy="316.2" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>greedy (1 beam): 0.6946 pep/mass, 1.5 GPU h</title></circle><text x="104.9" y="320.2" text-anchor="start" class="pt-label">greedy (1 beam)</text><circle cx="211.8" cy="102.5" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>beam search (10): 0.7278 pep/mass, 10.17 GPU h</title></circle><text x="225.8" y="106.5" text-anchor="start" class="pt-label">beam search (10)</text><circle cx="424.3" cy="99.3" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>knapsack beam (10): 0.7283 pep/mass, 25.4 GPU h</title></circle><text x="438.3" y="103.3" text-anchor="start" class="pt-label emph">knapsack beam (10)</text><circle cx="109.1" cy="190.1" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>InstaNovo+ diffusion only: 0.7142 pep/mass, 2.8 GPU h</title></circle><text x="123.1" y="194.1" text-anchor="start" class="pt-label">InstaNovo+ diffusion only</text><circle cx="110.2" cy="304.6" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>greedy + refinement: 0.6964 pep/mass, 2.88 GPU h</title></circle><text x="124.2" y="308.6" text-anchor="start" class="pt-label">greedy + refinement</text><circle cx="360.1" cy="77.4" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>beam (10) + refinement: 0.7317 pep/mass, 20.8 GPU h</title></circle><text x="374.1" y="81.4" text-anchor="start" class="pt-label">beam (10) + refinement</text><circle cx="569.7" cy="74.8" r="7" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>knapsack beam (10) + refinement: 0.7321 pep/mass, 35.83 GPU h</title></circle><text x="583.7" y="78.8" text-anchor="start" class="pt-label emph">knapsack beam (10) + refinement</text><text x="335" y="424" text-anchor="middle" class="axis-title">GPU hours</text><text x="16" y="32" class="axis-title">pep/mass precision</text></svg>
+<p class="note">Beam search over greedy buys <b>+0.0332</b> for ~7&times; the GPU. The knapsack constraint then
+buys <b>+0.0005</b> for another 2.5&times;. The dashed line is the cheapest mode reaching each accuracy level.</p>
+</section>
+<section>
+<h2>Knapsack is the one comparison that fails to separate</h2>
+<div class="two-col">
+<div>
+<p>All modes were scored on identical spectra, so differences were tested paired &mdash; McNemar plus a
+paired bootstrap over 779,879 spectra.</p>
+<p><b>42 comparisons, 41 significant at &alpha;=0.05.</b> The exception is knapsack beam-10 + refinement
+against plain beam-10 + refinement at peptide/exact level:</p>
+<table class="data compact">
+<tr><th>difference</th><td>+0.000099</td></tr>
+<tr><th>95% CI</th><td>&minus;0.000503 to +0.000671</td></tr>
+<tr><th>&chi;&sup2;</th><td>0.1</td></tr>
+<tr><th>discordant</th><td>26,294 / 26,217</td></tr>
+</table>
+</div>
+<div>
+<p class="callout">At n = 779,879 significance is nearly free. <code>knap10 &gt; beam10</code> is
+"significant" on a difference of <b>+0.0005</b>.</p>
+<p>The informative columns are the effect size and the win ratio:</p>
+<ul>
+<li><b>beam over greedy</b> &mdash; 10.6:1 discordance. Close to a pure improvement.</li>
+<li><b>refinement</b> &mdash; 1.19:1 to 1.45:1. Nearly a coin flip.</li>
+<li><b>knapsack over beam</b> &mdash; 1.05:1. Indistinguishable where it matters.</li>
+</ul>
+</div>
+</div>
+</section>
+<section>
+<h2>Refinement: a small win here, a uniform loss there</h2>
+<div class="legend"><span class="key"><i style="background:var(--series-1)"></i>base</span><span class="key"><i style="background:var(--series-2)"></i>+ InstaNovo+ refinement</span></div><svg viewBox="0 0 900 330" width="100%" role="img" aria-label="ProteoBench: refinement adds a small amount at every beam width" class="chart"><line x1="96" y1="266.0" x2="870" y2="266.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="270.0" text-anchor="end" class="tick">0.685</text><line x1="96" y1="209.5" x2="870" y2="209.5" stroke="var(--grid)" stroke-width="1"/><text x="86" y="213.5" text-anchor="end" class="tick">0.699</text><line x1="96" y1="153.0" x2="870" y2="153.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="157.0" text-anchor="end" class="tick">0.713</text><line x1="96" y1="96.5" x2="870" y2="96.5" stroke="var(--grid)" stroke-width="1"/><text x="86" y="100.5" text-anchor="end" class="tick">0.726</text><line x1="96" y1="40.0" x2="870" y2="40.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="44.0" text-anchor="end" class="tick">0.740</text><rect x="160.0" y="226.6" width="64.0" height="39.4" rx="4" fill="var(--series-1)"><title>base — greedy: 0.6946</title></rect><text x="192.0" y="218.6" text-anchor="middle" class="bar-label">0.6946</text><rect x="226.0" y="219.2" width="64.0" height="46.8" rx="4" fill="var(--series-2)"><title>+ InstaNovo+ refinement — greedy: 0.6964</title></rect><text x="258.0" y="211.2" text-anchor="middle" class="bar-label">0.6964</text><text x="225.0" y="288" text-anchor="middle" class="tick strong">greedy</text><rect x="418.0" y="90.1" width="64.0" height="175.9" rx="4" fill="var(--series-1)"><title>base — beam-10: 0.7278</title></rect><text x="450.0" y="82.1" text-anchor="middle" class="bar-label">0.7278</text><rect x="484.0" y="74.1" width="64.0" height="191.9" rx="4" fill="var(--series-2)"><title>+ InstaNovo+ refinement — beam-10: 0.7317</title></rect><text x="516.0" y="66.1" text-anchor="middle" class="bar-label">0.7317</text><text x="483.0" y="288" text-anchor="middle" class="tick strong">beam-10</text><rect x="676.0" y="88.1" width="64.0" height="177.9" rx="4" fill="var(--series-1)"><title>base — knapsack-10: 0.7283</title></rect><text x="708.0" y="80.1" text-anchor="middle" class="bar-label">0.7283</text><rect x="742.0" y="72.5" width="64.0" height="193.5" rx="4" fill="var(--series-2)"><title>+ InstaNovo+ refinement — knapsack-10: 0.7321</title></rect><text x="774.0" y="64.5" text-anchor="middle" class="bar-label">0.7321</text><text x="741.0" y="288" text-anchor="middle" class="tick strong">knapsack-10</text><line x1="96" y1="266" x2="870" y2="266" stroke="var(--grid)" stroke-width="1"/></svg>
+<p class="note">On ProteoBench, gated refinement adds <b>+0.0018 to +0.0039</b> pep/mass. On the internal
+held-out sets the same operation on the v1.3 checkpoint is <b>negative in 17 of 17 datasets</b>, and
+34 of 34 dataset-arm pairs across both checkpoints. That conclusion does not transfer &mdash; it reverses.</p>
+</section>
+<section>
+<h2>v1.2.2 vs v1.3.0 on ProteoBench: the gain is all in <em>exact</em></h2>
+<div class="legend"><span class="key"><i style="background:var(--series-1)"></i>v1.2.2</span><span class="key"><i style="background:var(--series-2)"></i>v1.3.0</span></div><svg viewBox="0 0 900 340" width="100%" role="img" aria-label="Greedy decoding, same dataset: v1.2.2 against v1.3.0" class="chart"><line x1="96" y1="276.0" x2="870" y2="276.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="280.0" text-anchor="end" class="tick">0.380</text><line x1="96" y1="217.0" x2="870" y2="217.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="221.0" text-anchor="end" class="tick">0.505</text><line x1="96" y1="158.0" x2="870" y2="158.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="162.0" text-anchor="end" class="tick">0.630</text><line x1="96" y1="99.0" x2="870" y2="99.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="103.0" text-anchor="end" class="tick">0.755</text><line x1="96" y1="40.0" x2="870" y2="40.0" stroke="var(--grid)" stroke-width="1"/><text x="86" y="44.0" text-anchor="end" class="tick">0.880</text><rect x="160.0" y="127.5" width="64.0" height="148.5" rx="4" fill="var(--series-1)"><title>v1.2.2 — pep/mass: 0.6946</title></rect><text x="192.0" y="119.5" text-anchor="middle" class="bar-label">0.6946</text><rect x="226.0" y="127.3" width="64.0" height="148.7" rx="4" fill="var(--series-2)"><title>v1.3.0 — pep/mass: 0.6951</title></rect><text x="258.0" y="119.3" text-anchor="middle" class="bar-label">0.6951</text><text x="225.0" y="298" text-anchor="middle" class="tick strong">pep/mass</text><rect x="418.0" y="264.4" width="64.0" height="11.6" rx="4" fill="var(--series-1)"><title>v1.2.2 — pep/exact: 0.4045</title></rect><text x="450.0" y="256.4" text-anchor="middle" class="bar-label">0.4045</text><rect x="484.0" y="244.1" width="64.0" height="31.9" rx="4" fill="var(--series-2)"><title>v1.3.0 — pep/exact: 0.4475</title></rect><text x="516.0" y="236.1" text-anchor="middle" class="bar-label">0.4475</text><text x="483.0" y="298" text-anchor="middle" class="tick strong">pep/exact</text><rect x="676.0" y="61.9" width="64.0" height="214.1" rx="4" fill="var(--series-1)"><title>v1.2.2 — aa/mass: 0.8335</title></rect><text x="708.0" y="53.9" text-anchor="middle" class="bar-label">0.8335</text><rect x="742.0" y="61.5" width="64.0" height="214.5" rx="4" fill="var(--series-2)"><title>v1.3.0 — aa/mass: 0.8345</title></rect><text x="774.0" y="53.5" text-anchor="middle" class="bar-label">0.8345</text><text x="741.0" y="298" text-anchor="middle" class="tick strong">aa/mass</text><line x1="96" y1="276" x2="870" y2="276" stroke="var(--grid)" stroke-width="1"/></svg>
+<p class="note">Greedy only &mdash; the other six v1.3.0 modes are still running. Mass matching is a tie
+(<b>+0.0005</b>); exact matching gains <b>+0.0430</b>. Mass forgives isobaric swaps and exact does not, so a
+gain that appears only at exact level points at <b>modification and I/L calls</b>, which is what a
+133-residue vocabulary would buy. Hypothesis, not conclusion: one mode, and <code>exact+IL</code> would test it.</p>
+</section>
+<section>
+<h2>On our own data, the older checkpoint is ahead at greedy</h2>
+<table class='data'><tr><th>Mode</th><th>checkpoint</th><th>pep/mass</th><th>aa/mass</th><th>pep AUC</th><th>wall clock</th></tr><tr><td class='mode'>greedy</td><td><span class='dot' style='background:var(--series-2)'></span>v1.3</td><td>0.5852</td><td>0.7289</td><td>0.8668</td><td class='num'>5 h 40 m</td></tr><tr><td class='mode'>greedy + refinement</td><td><span class='dot' style='background:var(--series-2)'></span>v1.3</td><td>0.5823</td><td>0.7249</td><td>0.8056</td><td class='num'>8 h 42 m</td></tr><tr><td class='mode'>knapsack beam-5</td><td><span class='dot' style='background:var(--series-2)'></span>v1.3</td><td>0.6458</td><td>0.7813</td><td>0.8851</td><td class='num'>121 h</td></tr><tr><td class='mode'>knapsack beam-5 + refinement</td><td><span class='dot' style='background:var(--series-2)'></span>v1.3</td><td>0.6408</td><td>0.7771</td><td>0.8357</td><td class='num'>8 h 57 m</td></tr><tr><td class='mode'>greedy</td><td><span class='dot' style='background:var(--series-1)'></span>v1.2.2</td><td>0.6031</td><td>0.7483</td><td>0.8785</td><td class='num'>5 h 51 m</td></tr><tr><td class='mode'>diffusion only</td><td><span class='dot' style='background:var(--series-1)'></span>v1.2.2</td><td>0.5885</td><td>0.7600</td><td>0.9364</td><td class='num'>8 h 24 m</td></tr></table>
+<p class="note">Pooled over 17 held-out sets, scored through ProteoBench's own scorer so the columns mean the
+same thing as the previous slides. v1.2.2 greedy beats v1.3 greedy by <b>+0.0179</b> pep/mass and leads in
+12 of 17 datasets &mdash; and the v1.3 wins cluster on antibody, immunopeptide and venom samples while v1.2.2
+takes 8 of the 9 <code>ninespecies</code> sets. Beam search is worth <b>+0.0606</b> on v1.3, winning 17 of 17.</p>
+<p class="note warn">The <code>aa AUC</code> for any refined or diffusion-only row is inflated and must not be
+compared across rows: InstaNovo+ emits no per-token scores, so the peptide score is broadcast across residues.</p>
+</section>
+<section>
+<h2>Per dataset, the greedy comparison is not close to uniform</h2>
+<div class="legend"><span class="key"><i style="background:var(--series-1)"></i>v1.2.2</span><span class="key"><i style="background:var(--series-2)"></i>v1.3.0 (133 residues)</span><span class="key muted">labels are the change in percentage points</span></div><svg viewBox="0 0 900 470" width="100%" role="img" aria-label="Per-dataset peptide recall, v1.2.2 against v1.3.0, greedy decoding" class="chart"><line x1="178.4" y1="26" x2="178.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="178.4" y="446" text-anchor="middle" class="tick">0.2</text><line x1="270.4" y1="26" x2="270.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="270.4" y="446" text-anchor="middle" class="tick">0.3</text><line x1="362.4" y1="26" x2="362.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="362.4" y="446" text-anchor="middle" class="tick">0.4</text><line x1="454.4" y1="26" x2="454.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="454.4" y="446" text-anchor="middle" class="tick">0.5</text><line x1="546.4" y1="26" x2="546.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="546.4" y="446" text-anchor="middle" class="tick">0.6</text><line x1="638.4" y1="26" x2="638.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="638.4" y="446" text-anchor="middle" class="tick">0.7</text><line x1="730.4" y1="26" x2="730.4" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="730.4" y="446" text-anchor="middle" class="tick">0.8</text><line x1="669.5" y1="37.8" x2="735.9" y2="37.8" stroke="var(--text-muted)" stroke-width="2"/><circle cx="669.5" cy="37.8" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>herceptin v1.2.2: 0.7338</title></circle><circle cx="735.9" cy="37.8" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>herceptin v1.3.0: 0.8060</title></circle><text x="148" y="41.8" text-anchor="end" class="tick strong">herceptin</text><text x="747.9" y="41.8" class="bar-label emph">+7.2</text><line x1="654.8" y1="61.3" x2="684.4" y2="61.3" stroke="var(--text-muted)" stroke-width="2"/><circle cx="654.8" cy="61.3" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>immuno v1.2.2: 0.7178</title></circle><circle cx="684.4" cy="61.3" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>immuno v1.3.0: 0.7500</title></circle><text x="148" y="65.3" text-anchor="end" class="tick strong">immuno</text><text x="696.4" y="65.3" class="bar-label emph">+3.2</text><line x1="181.3" y1="84.8" x2="195.1" y2="84.8" stroke="var(--text-muted)" stroke-width="2"/><circle cx="181.3" cy="84.8" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>snakevenoms v1.2.2: 0.2032</title></circle><circle cx="195.1" cy="84.8" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>snakevenoms v1.3.0: 0.2181</title></circle><text x="148" y="88.8" text-anchor="end" class="tick strong">snakevenoms</text><text x="207.1" y="88.8" class="bar-label">+1.5</text><line x1="441.6" y1="108.4" x2="454.0" y2="108.4" stroke="var(--text-muted)" stroke-width="2"/><circle cx="441.6" cy="108.4" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>tplantibodies v1.2.2: 0.4861</title></circle><circle cx="454.0" cy="108.4" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>tplantibodies v1.3.0: 0.4996</title></circle><text x="148" y="112.4" text-anchor="end" class="tick strong">tplantibodies</text><text x="466.0" y="112.4" class="bar-label">+1.4</text><line x1="428.7" y1="131.9" x2="430.5" y2="131.9" stroke="var(--text-muted)" stroke-width="2"/><circle cx="428.7" cy="131.9" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>clambacteria v1.2.2: 0.4721</title></circle><circle cx="430.5" cy="131.9" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>clambacteria v1.3.0: 0.4740</title></circle><text x="148" y="135.9" text-anchor="end" class="tick strong">clambacteria</text><text x="442.5" y="135.9" class="bar-label">+0.2</text><line x1="536.1" y1="155.4" x2="533.5" y2="155.4" stroke="var(--text-muted)" stroke-width="2"/><circle cx="536.1" cy="155.4" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>mmazei v1.2.2: 0.5888</title></circle><circle cx="533.5" cy="155.4" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>mmazei v1.3.0: 0.5860</title></circle><text x="148" y="159.4" text-anchor="end" class="tick strong">mmazei</text><text x="548.1" y="159.4" class="bar-label">-0.3</text><line x1="585.7" y1="178.9" x2="577.4" y2="178.9" stroke="var(--text-muted)" stroke-width="2"/><circle cx="585.7" cy="178.9" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>tomato v1.2.2: 0.6427</title></circle><circle cx="577.4" cy="178.9" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>tomato v1.3.0: 0.6337</title></circle><text x="148" y="182.9" text-anchor="end" class="tick strong">tomato</text><text x="597.7" y="182.9" class="bar-label">-0.9</text><line x1="586.6" y1="202.5" x2="577.0" y2="202.5" stroke="var(--text-muted)" stroke-width="2"/><circle cx="586.6" cy="202.5" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>bacillus v1.2.2: 0.6437</title></circle><circle cx="577.0" cy="202.5" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>bacillus v1.3.0: 0.6333</title></circle><text x="148" y="206.5" text-anchor="end" class="tick strong">bacillus</text><text x="598.6" y="206.5" class="bar-label">-1.0</text><line x1="683.2" y1="226.0" x2="669.8" y2="226.0" stroke="var(--text-muted)" stroke-width="2"/><circle cx="683.2" cy="226.0" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>sbrodae v1.2.2: 0.7487</title></circle><circle cx="669.8" cy="226.0" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>sbrodae v1.3.0: 0.7341</title></circle><text x="148" y="230.0" text-anchor="end" class="tick strong">sbrodae</text><text x="695.2" y="230.0" class="bar-label">-1.5</text><line x1="582.0" y1="249.5" x2="566.4" y2="249.5" stroke="var(--text-muted)" stroke-width="2"/><circle cx="582.0" cy="249.5" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>yeast v1.2.2: 0.6387</title></circle><circle cx="566.4" cy="249.5" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>yeast v1.3.0: 0.6217</title></circle><text x="148" y="253.5" text-anchor="end" class="tick strong">yeast</text><text x="594.0" y="253.5" class="bar-label">-1.7</text><line x1="501.4" y1="273.1" x2="480.8" y2="273.1" stroke="var(--text-muted)" stroke-width="2"/><circle cx="501.4" cy="273.1" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>mouse v1.2.2: 0.5511</title></circle><circle cx="480.8" cy="273.1" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>mouse v1.3.0: 0.5287</title></circle><text x="148" y="277.1" text-anchor="end" class="tick strong">mouse</text><text x="513.4" y="277.1" class="bar-label">-2.2</text><line x1="585.1" y1="296.6" x2="563.3" y2="296.6" stroke="var(--text-muted)" stroke-width="2"/><circle cx="585.1" cy="296.6" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>ricebean v1.2.2: 0.6421</title></circle><circle cx="563.3" cy="296.6" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>ricebean v1.3.0: 0.6184</title></circle><text x="148" y="300.6" text-anchor="end" class="tick strong">ricebean</text><text x="597.1" y="300.6" class="bar-label">-2.4</text><line x1="486.6" y1="320.1" x2="464.4" y2="320.1" stroke="var(--text-muted)" stroke-width="2"/><circle cx="486.6" cy="320.1" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>honeybee v1.2.2: 0.5350</title></circle><circle cx="464.4" cy="320.1" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>honeybee v1.3.0: 0.5109</title></circle><text x="148" y="324.1" text-anchor="end" class="tick strong">honeybee</text><text x="498.6" y="324.1" class="bar-label">-2.4</text><line x1="584.1" y1="343.6" x2="548.5" y2="343.6" stroke="var(--text-muted)" stroke-width="2"/><circle cx="584.1" cy="343.6" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>helaqc v1.2.2: 0.6410</title></circle><circle cx="548.5" cy="343.6" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>helaqc v1.3.0: 0.6023</title></circle><text x="148" y="347.6" text-anchor="end" class="tick strong">helaqc</text><text x="596.1" y="347.6" class="bar-label emph">-3.9</text><line x1="322.9" y1="367.2" x2="284.9" y2="367.2" stroke="var(--text-muted)" stroke-width="2"/><circle cx="322.9" cy="367.2" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>woundfluids v1.2.2: 0.3571</title></circle><circle cx="284.9" cy="367.2" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>woundfluids v1.3.0: 0.3158</title></circle><text x="148" y="371.2" text-anchor="end" class="tick strong">woundfluids</text><text x="334.9" y="371.2" class="bar-label emph">-4.1</text><line x1="766.6" y1="390.7" x2="727.5" y2="390.7" stroke="var(--text-muted)" stroke-width="2"/><circle cx="766.6" cy="390.7" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>gluc v1.2.2: 0.8394</title></circle><circle cx="727.5" cy="390.7" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>gluc v1.3.0: 0.7968</title></circle><text x="148" y="394.7" text-anchor="end" class="tick strong">gluc</text><text x="778.6" y="394.7" class="bar-label emph">-4.3</text><line x1="509.0" y1="414.2" x2="452.2" y2="414.2" stroke="var(--text-muted)" stroke-width="2"/><circle cx="509.0" cy="414.2" r="5.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>human v1.2.2: 0.5593</title></circle><circle cx="452.2" cy="414.2" r="5.5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>human v1.3.0: 0.4976</title></circle><text x="148" y="418.2" text-anchor="end" class="tick strong">human</text><text x="521.0" y="418.2" class="bar-label emph">-6.2</text><line x1="160" y1="26" x2="160" y2="426" stroke="var(--grid)" stroke-width="1"/><text x="482" y="464" text-anchor="middle" class="axis-title">peptide/mass recall — greedy decoding</text></svg>
+<p class="note">Unweighted mean across the 17 sets: <b>0.5883 &rarr; 0.5781</b>, i.e. v1.3.0 behind by
+<b>1.02 pp</b>, ahead in only <b>5 of 17</b>. The wins are large and concentrated &mdash; herceptin
+<b>+7.2</b>, immuno <b>+3.2</b> &mdash; and both are antibody or immunopeptide samples. The losses are broad,
+with human <b>&minus;6.2</b> and gluc <b>&minus;4.3</b>. Spectrum-weighted pooling gives a wider gap still
+(0.6031 &rarr; 0.5852), because the large <code>ninespecies</code> sets are where v1.2.2 leads.</p>
+<p class="note warn"><b>Unresolved:</b> an existing version of this chart reports the greedy means as
+0.5745 &rarr; 0.5772 (+0.27 pp, v1.3.0 <em>ahead</em>) with six datasets carrying the opposite sign
+(yeast, mmazei, tomato, bacillus, ricebean, clambacteria). These figures come from
+<code>_scored/metrics.csv</code>, i.e. ProteoBench's scorer at peptide/mass. The other chart's metric source
+needs identifying before either is presented &mdash; they disagree on the direction of the headline.</p>
+</section>
+<section>
+<h2>Cost is checkpoint-independent; knapsack is not</h2>
+<div class="two-col">
+<div>
+<table class="data compact">
+<tr><th>mode</th><th>v1.3</th><th>v1.2.2</th></tr>
+<tr><td>greedy</td><td>5 h 40 m</td><td>5 h 51 m</td></tr>
+<tr><td>beam-5</td><td>16 h 50 m</td><td>16 h 32 m</td></tr>
+<tr><td>refinement pass</td><td>8 h 42 m</td><td class="na">&mdash;</td></tr>
+<tr><td>diffusion only</td><td>19 h 33 m</td><td>8 h 24 m</td></tr>
+<tr class="best"><td>knapsack beam-5</td><td>121 h</td><td class="na">not run</td></tr>
+</table>
+<p class="note">Internal held-out sets, identical hardware throughout.</p>
+</div>
+<div>
+<ul>
+<li><b>The two generations cost the same per spectrum</b> &mdash; agreeing within 2% at both greedy and
+beam-5. Cost measured on one arm transfers to the other.</li>
+<li><b>Refinement costs more than the decode it refines</b>, and its price barely depends on what it
+refines (8 h 42 m on greedy, 8 h 57 m on knapsack beam-5). Refined modes are not cheap add-ons.</li>
+<li><b>Knapsack costs 7.2&times; plain beam</b> at the same width &mdash; 121 h against 16 h 50 m. On
+ProteoBench the same ratio was 2.5&times;, so this penalty did <em>not</em> transfer.</li>
+<li><b>Diffusion-only is 2.3&times; slower on v1.3</b> &mdash; the one mode where the generations diverge.</li>
+</ul>
+</div>
+</div>
+</section>
+<section>
+<h2>The confidence scores do not mean what they say</h2>
+<div class="two-col">
+<div>
+<table class="data compact">
+<tr><th>sTECE</th><td>−0.04405</td></tr><tr><th>TECE</th><td>0.04405</td></tr><tr><th>tolerance</th><td>0.005 (exceeded ~9×)</td></tr><tr><th>confidence cutoff at 5% FDR</th><td>0.781</td></tr><tr><th>accepted PSMs</th><td>504,692</td></tr><tr><th>true error rate there</th><td>9.40% (nominal 5%)</td></tr>
+</table>
+<p class="note">Winnow calibrate-estimate on beam-10, Koina running in-pod as a Triton sidecar.
+Reproduced to 16 significant figures on a rerun.</p>
+</div>
+<div>
+<p class="callout">At the 5% FDR operating point the true error rate is <b>9.4%</b> &mdash; roughly
+<b>47,000</b> wrong peptides among 504,692 accepted, where the FDR promises about 25,000.</p>
+<p>The reliability curve sits below the diagonal <em>everywhere</em>, so this is systematic rather than
+localised, and the gap <b>widens as the score falls</b>: near 0.99 it nearly touches the diagonal, at the
+0.781 threshold empirical correctness is only ~0.75.</p>
+<p><b>The miscalibration is worst exactly where the FDR cut is made.</b></p>
+</div>
+</div>
+</section>
+<section>
+<h2>Least trustworthy on the hardest organisms</h2>
+<svg viewBox="0 0 900 400" width="100%" role="img" aria-label="Over-confidence by species, three-fold range" class="chart"><line x1="250.0" y1="16" x2="250.0" y2="366" stroke="var(--grid)" stroke-width="1"/><text x="250.0" y="388" text-anchor="middle" class="tick">+0.000</text><line x1="390.0" y1="16" x2="390.0" y2="366" stroke="var(--grid)" stroke-width="1"/><text x="390.0" y="388" text-anchor="middle" class="tick">+0.025</text><line x1="530.0" y1="16" x2="530.0" y2="366" stroke="var(--grid)" stroke-width="1"/><text x="530.0" y="388" text-anchor="middle" class="tick">+0.050</text><line x1="670.0" y1="16" x2="670.0" y2="366" stroke="var(--grid)" stroke-width="1"/><text x="670.0" y="388" text-anchor="middle" class="tick">+0.075</text><line x1="810.0" y1="16" x2="810.0" y2="366" stroke="var(--grid)" stroke-width="1"/><text x="810.0" y="388" text-anchor="middle" class="tick">+0.100</text><rect x="250" y="20.0" width="516.9" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Candidatus endoloripes: claims 0.9465, achieves 0.8542 (n=42,676)</title></rect><text x="238" y="39.4" text-anchor="end" class="tick strong">Candidatus endoloripes</text><text x="776.9" y="39.4" class="bar-label">+0.0923</text><rect x="250" y="58.9" width="459.2" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Mus musculus: claims 0.9553, achieves 0.8733 (n=14,329)</title></rect><text x="238" y="78.3" text-anchor="end" class="tick strong">Mus musculus</text><text x="719.2" y="78.3" class="bar-label">+0.0820</text><rect x="250" y="97.8" width="324.2" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Apis mellifera: claims 0.9453, achieves 0.8874 (n=60,135)</title></rect><text x="238" y="117.2" text-anchor="end" class="tick strong">Apis mellifera</text><text x="584.2" y="117.2" class="bar-label">+0.0579</text><rect x="250" y="136.7" width="254.8" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Bacillus subtilis: claims 0.9505, achieves 0.9050 (n=74,714)</title></rect><text x="238" y="156.1" text-anchor="end" class="tick strong">Bacillus subtilis</text><text x="514.8" y="156.1" class="bar-label">+0.0455</text><rect x="250" y="175.6" width="237.4" height="30.9" rx="4" fill="var(--diverge-warm)"><title>H. sapiens: claims 0.9621, achieves 0.9197 (n=30,311)</title></rect><text x="238" y="195.0" text-anchor="end" class="tick strong">H. sapiens</text><text x="497.4" y="195.0" class="bar-label">+0.0424</text><rect x="250" y="214.4" width="208.3" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Vigna mungo: claims 0.9460, achieves 0.9088 (n=69,605)</title></rect><text x="238" y="233.9" text-anchor="end" class="tick strong">Vigna mungo</text><text x="468.3" y="233.9" class="bar-label">+0.0372</text><rect x="250" y="253.3" width="179.2" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Saccharomyces cerevisiae: claims 0.9517, achieves 0.9197 (n=77,223)</title></rect><text x="238" y="272.8" text-anchor="end" class="tick strong">Saccharomyces cerevisiae</text><text x="439.2" y="272.8" class="bar-label">+0.0320</text><rect x="250" y="292.2" width="165.2" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Solanum lycopersicum: claims 0.9558, achieves 0.9263 (n=72,437)</title></rect><text x="238" y="311.7" text-anchor="end" class="tick strong">Solanum lycopersicum</text><text x="425.2" y="311.7" class="bar-label">+0.0295</text><rect x="250" y="331.1" width="155.7" height="30.9" rx="4" fill="var(--diverge-warm)"><title>Methanosarcina mazei: claims 0.9450, achieves 0.9172 (n=63,262)</title></rect><text x="238" y="350.6" text-anchor="end" class="tick strong">Methanosarcina mazei</text><text x="415.7" y="350.6" class="bar-label">+0.0278</text><line x1="250" y1="16" x2="250" y2="366" stroke="var(--grid)" stroke-width="1"/><text x="530" y="396" text-anchor="middle" class="axis-title">claimed confidence − empirical correctness</text></svg>
+<p class="note">The aggregate &minus;0.044 averages over a <b>three-fold range</b>. The two worst-calibrated
+species are also the two with the highest unsolved rates, so the confidence is least reliable exactly where
+a user would most want to lean on it.</p>
+</section>
+<section>
+<h2>One number hides a sign change</h2>
+<svg viewBox="0 0 900 330" width="100%" role="img" aria-label="Calibration gap by score decile, sign changes across the range" class="chart"><line x1="90" y1="254.7" x2="860" y2="254.7" stroke="var(--grid)" stroke-width="1"/><text x="80" y="258.7" text-anchor="end" class="tick">-0.12</text><line x1="90" y1="202.9" x2="860" y2="202.9" stroke="var(--grid)" stroke-width="1"/><text x="80" y="206.9" text-anchor="end" class="tick">-0.06</text><line x1="90" y1="151.0" x2="860" y2="151.0" stroke="var(--grid)" stroke-width="1"/><text x="80" y="155.0" text-anchor="end" class="tick">+0.00</text><line x1="90" y1="99.1" x2="860" y2="99.1" stroke="var(--grid)" stroke-width="1"/><text x="80" y="103.1" text-anchor="end" class="tick">+0.06</text><line x1="90" y1="47.3" x2="860" y2="47.3" stroke="var(--grid)" stroke-width="1"/><text x="80" y="51.3" text-anchor="end" class="tick">+0.12</text><rect x="128.5" y="151.0" width="77.0" height="32.9" rx="4" fill="var(--diverge-cool)"><title>lowest decile: claims 0.0499, achieves 0.0880</title></rect><text x="167.0" y="201.9" text-anchor="middle" class="bar-label">-0.038</text><text x="167.0" y="306" text-anchor="middle" class="tick strong">lowest</text><rect x="282.5" y="151.0" width="77.0" height="108.1" rx="4" fill="var(--diverge-cool)"><title>2nd decile: claims 0.3155, achieves 0.4406</title></rect><text x="321.0" y="277.1" text-anchor="middle" class="bar-label">-0.125</text><text x="321.0" y="306" text-anchor="middle" class="tick strong">2nd</text><rect x="436.5" y="75.4" width="77.0" height="75.6" rx="4" fill="var(--diverge-warm)"><title>4th decile: claims 0.8527, achieves 0.7652</title></rect><text x="475.0" y="67.4" text-anchor="middle" class="bar-label">+0.088</text><text x="475.0" y="306" text-anchor="middle" class="tick strong">4th</text><rect x="590.5" y="58.6" width="77.0" height="92.4" rx="4" fill="var(--diverge-warm)"><title>5th decile: claims 0.9284, achieves 0.8215</title></rect><text x="629.0" y="50.6" text-anchor="middle" class="bar-label">+0.107</text><text x="629.0" y="306" text-anchor="middle" class="tick strong">5th</text><rect x="744.5" y="148.8" width="77.0" height="2.2" rx="4" fill="var(--diverge-warm)"><title>highest decile: claims 0.9851, achieves 0.9825</title></rect><text x="783.0" y="140.8" text-anchor="middle" class="bar-label">+0.003</text><text x="783.0" y="306" text-anchor="middle" class="tick strong">highest</text><line x1="90" y1="151.0" x2="860" y2="151.0" stroke="var(--text-secondary)" stroke-width="2"/><text x="860" y="141.0" text-anchor="end" class="tick">over-confident ↑</text><text x="860" y="173.0" text-anchor="end" class="tick">under-confident ↓</text></svg>
+<p class="note">Across the whole score range over-confidence is only <b>+0.0121</b> &mdash; because the ends
+cancel. The model is <b>under</b>-confident at the bottom and <b>over</b>-confident in the middle, with the top
+decile nearly perfect. This is why the tail-focused sTECE at the operating threshold is the more useful
+summary for FDR control: it looks only where the threshold actually falls.</p>
+</section>
+<section>
+<h2>Recalibration fixes the number, not the ranking</h2>
+<table class="data">
+<tr><th>measure</th><th>Winnow calibrated</th><th>InstaNovo log-prob</th><th>difference</th></tr>
+<tr><td class="mode">precision-coverage AUC</td><td>0.8578</td><td class="best-cell">0.8615</td><td class="num">−0.0037</td></tr><tr><td class="mode">ROC AUC (rank quality)</td><td>0.8772</td><td class="best-cell">0.8885</td><td class="num">−0.0113</td></tr>
+</table>
+<div class="two-col">
+<div>
+<p>Measured on <b>all 721,739 scored PSMs</b> using ProteoBench's own precision-coverage definition.
+Spearman between the two scores is <b>0.9275</b>, so the calibrated score genuinely reorders PSMs &mdash;
+the reordering is just mildly harmful.</p>
+</div>
+<div>
+<p class="callout">A Winnow-rescored submission would <b>not</b> move ProteoBench's AUC. What calibration
+buys is a confidence that means what it says, which FDR control requires and a raw log-probability cannot
+offer. That is a real result, and not a leaderboard improvement.</p>
+</div>
+</div>
+</section>
+<section>
+<h2>Measuring on the accepted subset had understated every feature</h2>
+<div class="legend"><span class="key"><i style="background:var(--series-1)"></i>FDR-accepted subset only</span><span class="key"><i style="background:var(--series-2)"></i>full coverage (721,739 PSMs)</span></div><svg viewBox="0 0 900 430" width="100%" role="img" aria-label="Feature discrimination, accepted subset versus full coverage" class="chart"><line x1="312.8" y1="30" x2="312.8" y2="384" stroke="var(--grid)" stroke-width="1"/><text x="312.8" y="406" text-anchor="middle" class="tick">0.5</text><line x1="438.3" y1="30" x2="438.3" y2="384" stroke="var(--grid)" stroke-width="1"/><text x="438.3" y="406" text-anchor="middle" class="tick">0.6</text><line x1="563.8" y1="30" x2="563.8" y2="384" stroke="var(--grid)" stroke-width="1"/><text x="563.8" y="406" text-anchor="middle" class="tick">0.7</text><line x1="689.4" y1="30" x2="689.4" y2="384" stroke="var(--grid)" stroke-width="1"/><text x="689.4" y="406" text-anchor="middle" class="tick">0.8</text><line x1="814.9" y1="30" x2="814.9" y2="384" stroke="var(--grid)" stroke-width="1"/><text x="814.9" y="406" text-anchor="middle" class="tick">0.9</text><line x1="658.7" y1="49.7" x2="801.5" y2="49.7" stroke="var(--text-muted)" stroke-width="2"/><circle cx="658.7" cy="49.7" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>median_margin on the FDR-accepted subset: 0.7756</title></circle><circle cx="801.5" cy="49.7" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>median_margin on full coverage: 0.8893</title></circle><text x="238" y="53.7" text-anchor="end" class="tick">median_margin<tspan class="src"> beam</tspan></text><text x="813.5" y="53.7" class="bar-label">0.889</text><line x1="626.8" y1="89.0" x2="786.3" y2="89.0" stroke="var(--text-muted)" stroke-width="2"/><circle cx="626.8" cy="89.0" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>calibrated_confidence on the FDR-accepted subset: 0.7502</title></circle><circle cx="786.3" cy="89.0" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>calibrated_confidence on full coverage: 0.8772</title></circle><text x="238" y="93.0" text-anchor="end" class="tick">calibrated_confidence<tspan class="src"> combined</tspan></text><text x="798.3" y="93.0" class="bar-label">0.877</text><line x1="635.1" y1="128.3" x2="781.8" y2="128.3" stroke="var(--text-muted)" stroke-width="2"/><circle cx="635.1" cy="128.3" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>margin on the FDR-accepted subset: 0.7568</title></circle><circle cx="781.8" cy="128.3" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>margin on full coverage: 0.8736</title></circle><text x="238" y="132.3" text-anchor="end" class="tick">margin<tspan class="src"> beam</tspan></text><text x="793.8" y="132.3" class="bar-label">0.874</text><line x1="627.0" y1="167.7" x2="774.6" y2="167.7" stroke="var(--text-muted)" stroke-width="2"/><circle cx="627.0" cy="167.7" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>min_token_probability on the FDR-accepted subset: 0.7503</title></circle><circle cx="774.6" cy="167.7" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>min_token_probability on full coverage: 0.8679</title></circle><text x="238" y="171.7" text-anchor="end" class="tick">min_token_probability<tspan class="src"> token</tspan></text><text x="786.6" y="171.7" class="bar-label">0.868</text><line x1="392.5" y1="207.0" x2="556.7" y2="207.0" stroke="var(--text-muted)" stroke-width="2"/><circle cx="392.5" cy="207.0" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>complementary_ion_count on the FDR-accepted subset: 0.5635</title></circle><circle cx="556.7" cy="207.0" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>complementary_ion_count on full coverage: 0.6943</title></circle><text x="238" y="211.0" text-anchor="end" class="tick strong">complementary_ion_count<tspan class="src"> Koina</tspan></text><text x="568.7" y="211.0" class="bar-label">0.694</text><line x1="441.2" y1="246.3" x2="529.9" y2="246.3" stroke="var(--text-muted)" stroke-width="2"/><circle cx="441.2" cy="246.3" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>spectral_angle on the FDR-accepted subset: 0.6023</title></circle><circle cx="529.9" cy="246.3" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>spectral_angle on full coverage: 0.6730</title></circle><text x="238" y="250.3" text-anchor="end" class="tick strong">spectral_angle<tspan class="src"> Koina</tspan></text><text x="541.9" y="250.3" class="bar-label">0.673</text><line x1="387.5" y1="285.7" x2="521.1" y2="285.7" stroke="var(--text-muted)" stroke-width="2"/><circle cx="387.5" cy="285.7" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>longest_y_series on the FDR-accepted subset: 0.5595</title></circle><circle cx="521.1" cy="285.7" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>longest_y_series on full coverage: 0.6660</title></circle><text x="238" y="289.7" text-anchor="end" class="tick strong">longest_y_series<tspan class="src"> Koina</tspan></text><text x="533.1" y="289.7" class="bar-label">0.666</text><line x1="317.9" y1="325.0" x2="454.4" y2="325.0" stroke="var(--text-muted)" stroke-width="2"/><circle cx="317.9" cy="325.0" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>longest_b_series on the FDR-accepted subset: 0.5041</title></circle><circle cx="454.4" cy="325.0" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>longest_b_series on full coverage: 0.6128</title></circle><text x="238" y="329.0" text-anchor="end" class="tick strong">longest_b_series<tspan class="src"> Koina</tspan></text><text x="466.4" y="329.0" class="bar-label">0.613</text><line x1="283.5" y1="364.3" x2="433.0" y2="364.3" stroke="var(--text-muted)" stroke-width="2"/><circle cx="283.5" cy="364.3" r="6" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"><title>xcorr on the FDR-accepted subset: 0.4767</title></circle><circle cx="433.0" cy="364.3" r="6" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"><title>xcorr on full coverage: 0.5958</title></circle><text x="238" y="368.3" text-anchor="end" class="tick strong">xcorr<tspan class="src"> Koina</tspan></text><text x="445.0" y="368.3" class="bar-label">0.596</text><line x1="250" y1="30" x2="250" y2="384" stroke="var(--grid)" stroke-width="1"/><text x="545" y="424" text-anchor="middle" class="axis-title">AUC against correctness</text></svg>
+<p class="note">The first pass measured on the 504,692 FDR-accepted rows &mdash; a subset selected by
+thresholding the very score under test. On full coverage every feature improves and the Koina fragment-match
+features improve most: <code>xcorr</code> moves from apparently <em>inverse</em> (0.477) to informative (0.596).
+An earlier claim that the Koina features "barely discriminate" was an artefact of that range restriction and is
+withdrawn. One earlier finding survives: the calibrator's combined output (0.877) still does not beat its single
+best input, <code>median_margin</code> (0.889).</p>
+</section>
+<section>
+<h2>Where this stands</h2>
+<div class="two-col">
+<div>
+<h3>Settled</h3>
+<ul>
+<li>Beam search is the intervention that pays; knapsack is not, on either benchmark.</li>
+<li>Gated refinement is marginal on ProteoBench and negative on our data.</li>
+<li>The confidence is over-confident by ~4.4 points at the operating threshold, worst on the hardest
+organisms, and recalibration does not improve ranking.</li>
+<li>Cost transfers between checkpoints; accuracy conclusions do not.</li>
+</ul>
+</div>
+<div>
+<h3>Open</h3>
+<ul>
+<li><b>Six v1.3.0 modes on ProteoBench</b> still running &mdash; greedy's exact-only gain needs the beam
+modes and <code>exact+IL</code> to confirm.</li>
+<li><b>Beam-10 on both internal arms</b> running; four v1.2.2 internal modes not yet launched.</li>
+<li>Why <b>diffusion-only is 2.3&times; slower</b> on the v1.3 checkpoint.</li>
+<li>A calibrator trained on a species-held-out split, to separate domain shift from intrinsic
+miscalibration &mdash; and to cover the five modes that keep no beams.</li>
+</ul>
+</div>
+</div>
+</section>
+</div></div>
+<script src="vendor/reveal.js"></script>
+<script>
+  Reveal.initialize({hash:true, slideNumber:'c/t', width:1280, height:800, margin:0.06,
+                     minScale:0.2, maxScale:1.6, transition:'fade'});
+</script>
+</body>
+</html>
