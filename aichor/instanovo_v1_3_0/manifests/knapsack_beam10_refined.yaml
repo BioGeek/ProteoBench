@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
+kind: AIchorManifest
+apiVersion: 0.2.3
+builder:
+  image: proteobench-instanovo-v1-3-0
+  dockerfile: ./aichor/instanovo_v1_3_0/Dockerfile
+  context: .
+  buildArgs:
+    # REQUIRED. No released instanovo can load the v1.3 checkpoints -- see the Dockerfile.
+    # The build fails fast rather than producing an image that dies at checkpoint load.
+    INSTANOVO_INSTALL_SPEC: ""
+spec:
+  operator: jobset
+  image: proteobench-instanovo-v1-3-0
+  # Knapsack beam-10, then gated InstaNovo+ refinement. v1.2.2 equivalent: 35h50m.
+  #
+  # Same dataset and settings as the v1.2.2 sweep -- run_sweep.py defaults to
+  # nine_species_balanced_De_Novo.mgf.gz -- with only the checkpoints changed.
+  command: >
+    cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
+    python run_sweep.py --full --only knapsack_beam10_refined
+    --work-dir /workspace/proteobench_v130_knapsack_beam10_refined
+    --output-prefix instanovo_v1_3_0_knapsack_beam10_refined
+    --instanovo-model s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/33768d55-ac95-40ab-9545-b3889ef8facf/checkpoints/instanovo-base/model_best.ckpt
+    --instanovo-plus-model s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/8d0443f2-7524-41a8-b5db-037fa7fc2276/checkpoints/instanovoplus-base/model_best.ckpt
+
+  types:
+    worker:
+      count: 1
+      completions: 1
+      parallelisms: 1
+      resources:
+        cpus: 24
+        ramRatio: 8
+        accelerators:
+          gpu:
+            count: 1
+            type: gpu
+            product: NVIDIA-H100-80GB-HBM3
