@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
+kind: AIchorManifest
+apiVersion: 0.2.3
+builder:
+  image: proteobench-internal-eval
+  dockerfile: ./aichor/internal_eval/Dockerfile
+  context: .
+spec:
+  operator: jobset
+  image: proteobench-internal-eval
+
+  # Score the completed held-out runs with ProteoBench's metrics. CPU only: this job reads
+  # prediction CSVs and scores them, it runs no model.
+  #
+  # Datasets are streamed one at a time and deleted after scoring, so peak disk is one CSV
+  # (~170 MB at the largest) rather than one run (~920 MB) or all six (~5.5 GB).
+  #
+  # Runs whose prefix does not exist are skipped with a warning, so this same command can be
+  # re-issued unchanged as the remaining five runs land.
+  command: >
+    cd /workspace/ProteoBench/aichor/internal_eval &&
+    python score_runs_aichor.py --save-intermediate --runs
+    instanovo_v1_3_133res_test_greedy
+    instanovo_v1_3_133res_test
+    instanovo_v1_3_133res_test_greedy_refined
+    instanovo_v1_3_133res_test_knapsack_beam5_refined
+    instanovo_v1_2_2_test_greedy
+    instanovo_v1_2_2_test_diffusion_only
+
+  types:
+    worker:
+      count: 1
+      completions: 1
+      parallelisms: 1
+      resources:
+        cpus: 4
+        ramRatio: 8
