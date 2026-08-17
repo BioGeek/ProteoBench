@@ -82,6 +82,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from psm_utils import Peptidoform
+from pyteomics.mass import std_aa_mass as _STD_AA_MASS
 
 from proteobench.datapoint.denovo_datapoint import (
     calculate_auc,
@@ -117,11 +118,14 @@ LEVELS = ["peptide", "aa"]
 # the v1.3 133-residue vocabulary includes U, and mass-constrained knapsack beam search emits
 # it (the knapsack runs crashed here while the greedy runs did not).
 #
-# Monoisotopic residue masses, i.e. the free amino acid minus water, matching the convention
-# of the entries already in AA_MASSES.
+# Taken from `pyteomics.mass.std_aa_mass` rather than computed here. pyteomics is already a
+# ProteoBench dependency and its table covers 23 residues, agreeing with the hand-written
+# AA_MASSES to within 1e-6 on every residue the two share -- so this adds the missing residues
+# without introducing a second, divergent source of truth.
 EXTRA_AA_MASSES = {
-    "U": 150.953636,  # selenocysteine, C3H5NOSe
-    "O": 237.147727,  # pyrrolysine, C12H19N3O2
+    residue: _STD_AA_MASS[residue]
+    for residue in ("U", "O", "J")  # selenocysteine, pyrrolysine, leucine/isoleucine
+    if residue in _STD_AA_MASS
 }
 
 
