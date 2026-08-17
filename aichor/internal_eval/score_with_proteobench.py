@@ -111,18 +111,49 @@ TOKEN_SCORE_COLUMNS = [
 
 LEVELS = ["peptide", "aa"]
 
+# ProteoBench's `DenovoScores.AA_MASSES` covers only the 20 standard residues, and
+# `get_token_mass` indexes it without a fallback -- so a single predicted selenocysteine
+# raises `KeyError: 'U'` and takes the whole run's scoring down. That is not hypothetical:
+# the v1.3 133-residue vocabulary includes U, and mass-constrained knapsack beam search emits
+# it (the knapsack runs crashed here while the greedy runs did not).
+#
+# Monoisotopic residue masses, i.e. the free amino acid minus water, matching the convention
+# of the entries already in AA_MASSES.
+EXTRA_AA_MASSES = {
+    "U": 150.953636,  # selenocysteine, C3H5NOSe
+    "O": 237.147727,  # pyrrolysine, C12H19N3O2
+}
+
 
 class _ScoresNoFasta(DenovoScores):
-    """`DenovoScores` with the ProteoBench species peptide-set lookup disabled.
+    """`DenovoScores` with the species peptide-set lookup disabled and the residue table widened.
 
-    The base class downloads per-species peptide sets from the ProteoBench server to label
-    wrong answers as "a real peptide of that species" vs "an invention". Those sets describe
-    the ProteoBench benchmark, not our held-out data, so consulting them here would be
-    meaningless at best and misleading at worst.
+    Two deviations from the base class, both documented in the module docstring:
+
+    * `load_species_sets` returns nothing. The base class downloads per-species peptide sets
+      from the ProteoBench server to label wrong answers as "a real peptide of that species"
+      vs "an invention". Those sets describe the ProteoBench benchmark, not our held-out data.
+    * `AA_MASSES` gains selenocysteine and pyrrolysine. Scoring them correctly is strictly
+      better than the alternatives available: upstream crashes, and treating the rows as
+      unscoreable would penalise exactly the modes that emit them.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.AA_MASSES = {**self.AA_MASSES, **EXTRA_AA_MASSES}
 
     def load_species_sets(self, path: str | None = None) -> dict[str, set]:
         return {}
+
+
+KNOWN_RESIDUES = set(DenovoScores().AA_MASSES) | set(EXTRA_AA_MASSES)
+
+
+def _unknown_residues(peptidoform: Peptidoform | None) -> set[str]:
+    """Residues this scorer has no mass for. Non-empty means the row cannot be scored."""
+    if peptidoform is None:
+        return set()
+    return {aa for aa in peptidoform.sequence if aa not in KNOWN_RESIDUES}
 
 
 def _pick_column(df: pd.DataFrame, candidates: list[str], what: str) -> str | None:
@@ -191,6 +222,24 @@ def build_standard_frame(csv_path: Path, dataset: str) -> tuple[pd.DataFrame, di
     # Rows whose *ground truth* will not parse cannot be scored at all -- they are not a
     # prediction failure, they are an unusable label, and leaving them in would silently
     # depress every metric. Drop them, loudly.
+    # Any residue still outside the (widened) mass table would raise a bare KeyError deep
+    # inside get_token_mass and lose the whole run, so screen for it here instead. Predictions
+    # are demoted to a miss; labels make the row unscoreable. Both are counted and reported
+    # rather than silently dropped -- a rising count means the vocabulary has moved again.
+    unknown_in_prediction = frame["peptidoform"].map(_unknown_residues)
+    unknown_in_label = frame["peptidoform_ground_truth"].map(_unknown_residues)
+    offending = sorted(set().union(*unknown_in_prediction, *unknown_in_label)) if len(frame) else []
+    if offending:
+        n_pred = int(unknown_in_prediction.map(bool).sum())
+        n_label = int(unknown_in_label.map(bool).sum())
+        print(
+            f"  [warn] residues with no mass in this scorer: {offending} "
+            f"({n_pred:,} predictions demoted to misses, {n_label:,} labels unscoreable)",
+            file=sys.stderr,
+        )
+        frame.loc[unknown_in_prediction.map(bool), "peptidoform"] = None
+        frame.loc[unknown_in_label.map(bool), "peptidoform_ground_truth"] = None
+
     usable = frame["peptidoform_ground_truth"].notna()
     unusable_labels = int((~usable).sum())
     if unusable_labels:
