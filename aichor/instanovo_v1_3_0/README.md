@@ -91,10 +91,15 @@ treat the training branch as the source of truth if they ever diverge.
 
 ### Two consequences of leaving 1.2.2 behind
 
-- **The torch upper bound is gone.** `torch<2.6` existed because torch ≥ 2.6's restricted
-  unpickler refuses `SETITEM` on the defaultdict inside the 1.2.x checkpoints. The v1.3
-  checkpoints were written by **torch 2.8.0+cu126** (see the logs of internal experiment
-  `4cc23918`), so pinning below 2.6 would likely fail to load them.
+- **torch is pinned to `2.8.0`, not unbounded.** `torch<2.6` in the v1.2.2 image existed
+  because torch ≥ 2.6's restricted unpickler refuses `SETITEM` on the defaultdict inside the
+  checkpoints. That bound is wrong for v1.3, but unbounded is worse: the first launch resolved
+  to **torch 2.13.0+cu130** and all seven runs died at checkpoint load with `Can only SETITEM
+  for dict, collections.OrderedDict, collections.Counter, but got defaultdict` — even though
+  `instanovo/transformer/model.py` registers `defaultdict` via `add_safe_globals`. Some torch
+  after 2.8 tightened that check beyond what the allowlist covers. 2.8.0 is what the internal
+  `cu126` extra pins and what runs `4cc23918`, `3f3b282e` and `9aeb6891` used, so it is the only
+  version these checkpoints are known to load under.
 - **`HOSTED_PLATFORM_MARKERS` stripping is probably now unnecessary.** `run_sweep.py` strips
   `AICHOR_LOGS_PATH` because instanovo 1.2.2 only accepted the S3 endpoint as `S3_ENDPOINT`;
   later versions read `AWS_ENDPOINT_URL`, which the platform sets. It is left in place because

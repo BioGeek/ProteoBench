@@ -36,11 +36,23 @@ COPY . /workspace/ProteoBench
 # identical by the sha256 in wheels/SHA256SUMS. Override the arg to test another build.
 ARG INSTANOVO_INSTALL_SPEC=aichor/instanovo_v1_3_0/wheels/instanovo-1.3.0-py3-none-any.whl
 ARG POLARS_INSTALL_SPEC=polars==1.41.2
-# No upper bound on torch, unlike the v1.2.2 image. That pin existed because torch>=2.6's
-# restricted unpickler refuses SETITEM on the defaultdict inside the 1.2.x checkpoints. The
-# v1.3 checkpoints were written by torch 2.8.0+cu126 (see the inference logs of experiment
-# 4cc23918), so pinning below 2.6 here would likely fail to load them at all.
-ARG TORCH_INSTALL_SPEC="torch"
+# Pinned to the exact version the internal runs load these checkpoints with. Do not relax it.
+#
+# The v1.2.2 image pins torch<2.6 because torch>=2.6's restricted unpickler refuses SETITEM on
+# the defaultdict inside the checkpoints. That bound is wrong for v1.3 -- these checkpoints were
+# written by torch 2.8.0+cu126 -- but leaving torch unbounded is worse: the first attempt
+# resolved to torch 2.13.0+cu130 and every run died at checkpoint load with
+#
+#   _pickle.UnpicklingError: Weights only load failed ...
+#   Can only SETITEM for dict, collections.OrderedDict, collections.Counter,
+#   but got <class 'collections.defaultdict'>
+#
+# even though instanovo/transformer/model.py registers defaultdict via
+# torch.serialization.add_safe_globals -- so some torch after 2.8 tightened the SETITEM check
+# beyond what that allowlist covers. 2.8.0 is what InstaNovo-internal's cu126 extra pins, and
+# what experiments 4cc23918, 3f3b282e and 9aeb6891 ran, so it is the only version these
+# checkpoints are known to load under.
+ARG TORCH_INSTALL_SPEC="torch==2.8.0"
 
 # Verify the vendored wheel against its recorded checksum before installing it. A silently
 # corrupted or stale wheel would otherwise surface much later as a checkpoint-loading error.
