@@ -128,33 +128,51 @@ WINNOW_FEATURES = [
     ("xcorr", 0.4767, 0.5958, "Koina"),
 ]
 
-# ── run inventory: done / running / planned ─────────────────────────────────────────────
-MODES_PB = ["greedy", "beam10", "knapsack_beam10", "greedy+ref", "beam10+ref", "knapsack+ref", "diffusion_only"]
-MODES_INT = ["greedy", "beam5", "beam10", "knapsack_beam5", "greedy+ref", "beam5+ref", "beam10+ref", "knapsack+ref", "diffusion_only"]
-STATUS = {
-    ("ProteoBench", "v1.2.2"): dict.fromkeys(MODES_PB, "done"),
-    ("ProteoBench", "v1.3.0"): {**dict.fromkeys(MODES_PB, "running"), "greedy": "done"},
-    ("Internal", "v1.3"): {
-        "greedy": "done", "beam5": "scoring", "knapsack_beam5": "done", "diffusion_only": "scoring",
-        "greedy+ref": "done", "knapsack+ref": "done", "beam5+ref": "running", "beam10": "running",
-        "beam10+ref": "planned",
-    },
-    ("Internal", "v1.2.2"): {
-        "greedy": "done", "diffusion_only": "done", "beam5": "scoring", "beam10": "running",
-        "beam5+ref": "running", "greedy+ref": "planned", "beam10+ref": "planned",
-        "knapsack_beam5": "planned", "knapsack+ref": "planned",
-    },
-}
+# ── run inventory ───────────────────────────────────────────────────────────────────────
+# One table per benchmark, because the two have genuinely different mode sets: ProteoBench
+# was swept at beam width 10, the internal sets at width 5 (to match the knapsack run that
+# already existed there). Sharing one column set silently dropped ProteoBench's
+# knapsack_beam10 and printed spurious dashes for beam-5 columns it never had.
+MODES_PB = ["greedy", "beam-10", "knapsack-10", "greedy+ref", "beam-10+ref", "knapsack-10+ref", "diffusion"]
+MODES_INT = ["greedy", "beam-5", "beam-10", "knapsack-5", "greedy+ref", "beam-5+ref", "beam-10+ref", "knapsack-5+ref", "diffusion"]
+STATUS = [
+    ("ProteoBench nine-species balanced", MODES_PB, [
+        ("v1.2.2", dict.fromkeys(MODES_PB, "done")),
+        ("v1.3.0", {**dict.fromkeys(MODES_PB, "running"), "greedy": "done"}),
+    ]),
+    ("Internal held-out (17 sets)", MODES_INT, [
+        ("v1.3", {
+            "greedy": "done", "greedy+ref": "done", "knapsack-5": "done", "knapsack-5+ref": "done",
+            "beam-5": "scoring", "diffusion": "scoring", "beam-5+ref": "running", "beam-10": "running",
+            "beam-10+ref": "planned",
+        }),
+        ("v1.2.2", {
+            "greedy": "done", "diffusion": "done", "beam-5": "scoring", "beam-10": "running",
+            "beam-5+ref": "running", "greedy+ref": "planned", "beam-10+ref": "planned",
+            "knapsack-5": "skipped", "knapsack-5+ref": "skipped",
+        }),
+    ]),
+]
 STATUS_STYLE = {
-    "done": ("●", "st-done", "complete"),
-    "scoring": ("◐", "st-scoring", "run complete, scoring"),
+    "done": ("●", "st-done", "scored"),
+    "scoring": ("◐", "st-scoring", "run done, scoring"),
     "running": ("◑", "st-running", "running"),
     "planned": ("○", "st-planned", "planned"),
+    "skipped": ("✕", "st-skipped", "deliberately not run"),
 }
 
 
 def esc(s) -> str:
     return html.escape(str(s))
+
+
+def src(*parts: str) -> str:
+    """Provenance line placed ABOVE a table or chart.
+
+    Every table and chart in the deck carries one, so a reader landing on any slide can see
+    which dataset and which checkpoint it belongs to without inferring it from the heading.
+    """
+    return '<p class="table-src">' + " &middot; ".join(esc(x) for x in parts) + "</p>"
 
 
 # ══ chart helpers ══════════════════════════════════════════════════════════════════════
@@ -410,36 +428,60 @@ def per_dataset_dumbbell() -> str:
 
 
 def status_matrix() -> str:
-    header = "".join(f"<th>{esc(m)}</th>" for m in MODES_INT)
-    body = []
-    for (bench, ver), modes in STATUS.items():
-        cells = []
-        for m in MODES_INT:
-            st = modes.get(m)
-            if st is None:
-                cells.append('<td class="na">—</td>')
-            else:
-                glyph, cls, tip = STATUS_STYLE[st]
+    """One table per benchmark. Every cell is a mode that benchmark actually has, so there are
+    no placeholder dashes to misread as missing work."""
+    tables = []
+    for bench, modes, arms in STATUS:
+        header = "".join(f"<th>{esc(m)}</th>" for m in modes)
+        rows = []
+        for ver, states in arms:
+            cells = []
+            for m in modes:
+                glyph, cls, tip = STATUS_STYLE[states[m]]
                 cells.append(f'<td class="{cls}" title="{esc(tip)}">{glyph}</td>')
-        body.append(f"<tr><th class='rowhead'>{esc(bench)} &middot; {esc(ver)}</th>{''.join(cells)}</tr>")
+            rows.append(f"<tr><th class='rowhead'>{esc(ver)}</th>{''.join(cells)}</tr>")
+        tables.append(
+            src(bench, "checkpoint per row")
+            + f"<table class='matrix'><tr><th></th>{header}</tr>{''.join(rows)}</table>"
+        )
     key = " ".join(
         f'<span class="key"><b class="{cls}">{g}</b>{esc(t)}</span>' for g, cls, t in STATUS_STYLE.values()
     )
     note = (
-        "<p class='note'>ProteoBench has no beam-5 or knapsack beam-5 mode and the internal sets have no "
-        "beam-10 knapsack run, so the dashes are by design, not gaps.</p>"
+        "<p class='note'>The two benchmarks were swept at different beam widths &mdash; 10 on ProteoBench, "
+        "5 internally, to match the knapsack run that already existed there &mdash; so their mode sets differ "
+        "and are listed separately. The two internal knapsack cells are crossed rather than pending: the v1.3 "
+        "knapsack beam-5 run cost <b>121 h</b> to test the one comparison that came back non-significant, so "
+        "the v1.2.2 counterpart was deliberately not launched.</p>"
     )
-    return f"<table class='matrix'><tr><th></th>{header}</tr>{''.join(body)}</table><div class='legend'>{key}</div>{note}"
+    return "".join(tables) + f"<div class='legend'>{key}</div>{note}"
 
 
 def pb_table() -> str:
-    head = "<tr><th>Mode</th><th>pep/mass</th><th>pep/exact</th><th>exact+IL</th><th>aa/mass</th><th>pep AUC</th><th>GPU</th></tr>"
+    """The v1.2.2 sweep, with the best value in each metric column bolded.
+
+    Per column, not per row: no single mode wins everything. Knapsack beam-10 + refinement takes
+    pep/mass, exact+IL and AUC; plain beam-10 + refinement takes pep/exact by 0.0001; and
+    diffusion-only takes aa/mass outright. Bolding a whole row would assert a clean sweep that
+    the numbers do not support.
+
+    GPU time is deliberately left unbolded -- it is a cost, so "highest" would mark the worst
+    mode, and marking the lowest would put a winner's emphasis on the least accurate one.
+    """
+    cols = ["pep/mass", "pep/exact", "exact+IL", "aa/mass", "pep AUC"]
+    values = [[m[i + 1] for m in PB_V122] for i in range(5)]
+    best_at = [max(range(len(PB_V122)), key=lambda r: values[c][r]) for c in range(5)]
+
+    head = "<tr><th>Mode</th>" + "".join(f"<th>{esc(c)}</th>" for c in cols) + "<th>GPU</th></tr>"
     rows = []
-    for name, pm, pe, il, aa, auc, hours in PB_V122:
-        best = "best" if name.startswith("knapsack beam (10) + ref") else ""
+    for ri, (name, *metrics, hours) in enumerate(PB_V122):
+        cells = []
+        for ci in range(5):
+            v = metrics[ci]
+            cls = " class='best-cell'" if best_at[ci] == ri else ""
+            cells.append(f"<td{cls}>{v:.4f}</td>")
         rows.append(
-            f"<tr class='{best}'><td class='mode'>{esc(name)}</td><td>{pm:.4f}</td><td>{pe:.4f}</td>"
-            f"<td>{il:.4f}</td><td>{aa:.4f}</td><td>{auc:.4f}</td><td class='num'>{hours:g} h</td></tr>"
+            f"<tr><td class='mode'>{esc(name)}</td>{''.join(cells)}<td class='num cost'>{hours:g} h</td></tr>"
         )
     return f"<table class='data'>{head}{''.join(rows)}</table>"
 
@@ -478,19 +520,26 @@ slide(f"""
 <p class="lede">Two checkpoints &times; two benchmarks &times; the decoding modes that matter.</p>
 {status_matrix()}
 <p class="note">The v1.2.2 arm on ProteoBench is complete and is the reference everything else is read
-against. The v1.3.0 arm on the same data is one mode in. Internally, both checkpoints share one
-harness and one dataset list so only the weights vary.</p>
+against; the v1.3.0 arm on the same data is one mode in, with six running. Internally both checkpoints
+share one harness and one dataset list, so only the weights vary.</p>
 """)
 
 slide(f"""
 <h2>Decoding choice moves accuracy more than anything else</h2>
+{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2")}
 {pb_table()}
-<p class="note">ProteoBench nine-species balanced, 779,879 spectra, InstaNovo v1.2.2. Refined modes are
-<b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally.</p>
+<p class="note">Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
+each column: no mode sweeps them. Knapsack beam-10 + refinement takes pep/mass, exact+IL and AUC; plain
+beam-10 + refinement takes pep/exact by <b>0.0001</b>; diffusion-only takes aa/mass outright. GPU time is a
+cost, so it carries no winner.</p>
+<p class="note warn">Treat the two leads over plain beam-10 + refinement as ties, not results. The paired
+test on the pep/exact pair is the single <b>non-significant</b> comparison of 42 (next slide): +0.000099,
+95% CI &minus;0.000503 to +0.000671. The bold marks the larger number, not a real difference.</p>
 """)
 
 slide(f"""
 <h2>...but the last increments cost the most</h2>
+{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2")}
 {cost_scatter()}
 <p class="note">Beam search over greedy buys <b>+0.0332</b> for ~7&times; the GPU. The knapsack constraint then
 buys <b>+0.0005</b> for another 2.5&times;. The dashed line is the cheapest mode reaching each accuracy level.</p>
@@ -504,6 +553,7 @@ slide("""
 paired bootstrap over 779,879 spectra.</p>
 <p><b>42 comparisons, 41 significant at &alpha;=0.05.</b> The exception is knapsack beam-10 + refinement
 against plain beam-10 + refinement at peptide/exact level:</p>
+<p class="table-src">ProteoBench nine-species balanced &middot; InstaNovo v1.2.2 &middot; paired over 779,879 spectra</p>
 <table class="data compact">
 <tr><th>difference</th><td>+0.000099</td></tr>
 <tr><th>95% CI</th><td>&minus;0.000503 to +0.000671</td></tr>
@@ -526,6 +576,7 @@ against plain beam-10 + refinement at peptide/exact level:</p>
 
 slide(f"""
 <h2>Refinement: a small win here, a uniform loss there</h2>
+{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2")}
 {grouped_bars(
     [("greedy", [0.6946, 0.6964]), ("beam-10", [0.7278, 0.7317]), ("knapsack-10", [0.7283, 0.7321])],
     ["base", "+ InstaNovo+ refinement"], [C_V122, C_V130],
@@ -537,6 +588,7 @@ held-out sets the same operation on the v1.3 checkpoint is <b>negative in 17 of 
 
 slide(f"""
 <h2>v1.2.2 vs v1.3.0 on ProteoBench: the gain is all in <em>exact</em></h2>
+{src("ProteoBench nine-species balanced", "779,879 spectra", "greedy decoding", "v1.2.2 vs v1.3.0")}
 {grouped_bars(
     [("pep/mass", [0.6946, PB_V130_GREEDY["pep_mass"]]),
      ("pep/exact", [0.4045, PB_V130_GREEDY["pep_exact"]]),
@@ -551,6 +603,7 @@ gain that appears only at exact level points at <b>modification and I/L calls</b
 
 slide(f"""
 <h2>On our own data, the older checkpoint is ahead at greedy</h2>
+{src("Internal held-out, 17 sets", "pooled over all spectra", "ProteoBench scorer")}
 {internal_table()}
 <p class="note">Pooled over 17 held-out sets, scored through ProteoBench's own scorer so the columns mean the
 same thing as the previous slides. v1.2.2 greedy beats v1.3 greedy by <b>+0.0179</b> pep/mass and leads in
@@ -562,6 +615,7 @@ compared across rows: InstaNovo+ emits no per-token scores, so the peptide score
 
 slide(f"""
 <h2>Per dataset, the greedy comparison is not close to uniform</h2>
+{src("Internal held-out, 17 sets", "per dataset", "greedy decoding", "ProteoBench scorer, peptide/mass")}
 {per_dataset_dumbbell()}
 <p class="note">Unweighted mean across the 17 sets: <b>0.5883 &rarr; 0.5781</b>, i.e. v1.3.0 behind by
 <b>1.02 pp</b>, ahead in only <b>5 of 17</b>. The wins are large and concentrated &mdash; herceptin
@@ -575,10 +629,11 @@ with human <b>&minus;6.2</b> and gluc <b>&minus;4.3</b>. Spectrum-weighted pooli
 needs identifying before either is presented &mdash; they disagree on the direction of the headline.</p>
 """)
 
-slide("""
+slide(f"""
 <h2>Cost is checkpoint-independent; knapsack is not</h2>
 <div class="two-col">
 <div>
+<p class="table-src">Internal held-out, 17 sets &middot; wall clock &middot; identical hardware throughout</p>
 <table class="data compact">
 <tr><th>mode</th><th>v1.3</th><th>v1.2.2</th></tr>
 <tr><td>greedy</td><td>5 h 40 m</td><td>5 h 51 m</td></tr>
@@ -607,6 +662,7 @@ slide(f"""
 <h2>The confidence scores do not mean what they say</h2>
 <div class="two-col">
 <div>
+{src("ProteoBench nine-species balanced", "InstaNovo v1.2.2", "beam-10", "Winnow calibrate-estimate")}
 <table class="data compact">
 {''.join(f'<tr><th>{esc(k)}</th><td>{esc(v)}</td></tr>' for k, v in WINNOW_HEADLINE)}
 </table>
@@ -626,6 +682,7 @@ localised, and the gap <b>widens as the score falls</b>: near 0.99 it nearly tou
 
 slide(f"""
 <h2>Least trustworthy on the hardest organisms</h2>
+{src("ProteoBench nine-species balanced", "InstaNovo v1.2.2", "beam-10 top-1", "FDR-accepted set")}
 {species_bars()}
 <p class="note">The aggregate &minus;0.044 averages over a <b>three-fold range</b>. The two worst-calibrated
 species are also the two with the highest unsolved rates, so the confidence is least reliable exactly where
@@ -634,6 +691,7 @@ a user would most want to lean on it.</p>
 
 slide(f"""
 <h2>One number hides a sign change</h2>
+{src("ProteoBench nine-species balanced", "InstaNovo v1.2.2", "beam-10", "all 721,739 scored PSMs")}
 {decile_bars()}
 <p class="note">Across the whole score range over-confidence is only <b>+0.0121</b> &mdash; because the ends
 cancel. The model is <b>under</b>-confident at the bottom and <b>over</b>-confident in the middle, with the top
@@ -643,6 +701,7 @@ summary for FDR control: it looks only where the threshold actually falls.</p>
 
 slide(f"""
 <h2>Recalibration fixes the number, not the ranking</h2>
+{src("ProteoBench nine-species balanced", "InstaNovo v1.2.2", "beam-10", "all 721,739 scored PSMs")}
 <table class="data">
 <tr><th>measure</th><th>Winnow calibrated</th><th>InstaNovo log-prob</th><th>difference</th></tr>
 {''.join(f'<tr><td class="mode">{esc(m)}</td><td>{a:.4f}</td><td class="best-cell">{b:.4f}</td><td class="num">{d}</td></tr>' for m, a, b, d in WINNOW_RANKING)}
@@ -663,6 +722,7 @@ offer. That is a real result, and not a leaderboard improvement.</p>
 
 slide(f"""
 <h2>Measuring on the accepted subset had understated every feature</h2>
+{src("ProteoBench nine-species balanced", "InstaNovo v1.2.2", "beam-10", "Winnow calibrate-estimate")}
 {feature_dumbbell()}
 <p class="note">The first pass measured on the 504,692 FDR-accepted rows &mdash; a subset selected by
 thresholding the very score under test. On full coverage every feature improves and the Koina fragment-match
@@ -748,6 +808,11 @@ table.matrix th.rowhead{text-align:left; white-space:nowrap; color:var(--text-pr
 table.matrix td{padding:.4em .3em; font-size:1.3em; border-bottom:1px solid var(--grid);}
 .st-done{color:var(--series-1);} .st-scoring{color:var(--series-2);}
 .st-running{color:var(--series-2); opacity:.75;} .st-planned{color:var(--text-muted);}
+.st-skipped{color:var(--text-muted); opacity:.8;}
+.table-src{font-size:.44em !important; color:var(--text-secondary); margin:.55em 0 .35em;
+ letter-spacing:.02em; font-weight:600;}
+.table-src:first-child{margin-top:0;}
+table.matrix{margin-bottom:.2em;}
 .dot{display:inline-block; width:.6em; height:.6em; border-radius:50%; margin-right:.4em;}
 
 .legend{display:flex; gap:1.2em; flex-wrap:wrap; margin:.2em 0 .5em; font-size:.46em;

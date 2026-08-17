@@ -17,6 +17,14 @@ at the top of `build_deck.py` and regenerating, not editing slides.
 | `WINNOW_*` | Notion sections 5, 15 and 26 |
 | `STATUS` | live AIchor experiment states |
 
+## Provenance captions
+
+Every table and chart carries a `src()` caption **above** it naming the dataset, the spectrum count
+where relevant, the checkpoint and the decoding mode. A reader landing on any single slide can tell
+what it is about without inferring it from the heading, and a slide that mixes checkpoints (the
+pooled internal table, the status matrices) says so explicitly rather than relying on a colour key.
+The build asserts that no slide containing a table or chart lacks one.
+
 ## Charts
 
 Hand-built inline SVG rather than a plotting library, so the deck stays one self-contained file.
