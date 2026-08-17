@@ -5,10 +5,6 @@ builder:
   image: proteobench-instanovo-v1-3-0
   dockerfile: ./aichor/instanovo_v1_3_0/Dockerfile
   context: .
-  buildArgs:
-    # REQUIRED. No released instanovo can load the v1.3 checkpoints -- see the Dockerfile.
-    # The build fails fast rather than producing an image that dies at checkpoint load.
-    INSTANOVO_INSTALL_SPEC: ""
 spec:
   operator: jobset
   image: proteobench-instanovo-v1-3-0

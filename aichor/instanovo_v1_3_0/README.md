@@ -30,30 +30,52 @@ Only the checkpoints, passed per variant:
 `--instanovo-plus-model` is passed only for the four variants that use it (the three refined
 ones and `diffusion_only`); `--instanovo-model` only for the six that run the transformer.
 
-## The one thing "just update the checkpoints" does not cover
+## The instanovo build: a vendored wheel
 
-**No released `instanovo` can load these checkpoints.** PyPI tops out at **1.2.2** (versions:
-0.1.7, 1.0.0, 1.1.0–1.1.4, 1.2.2 — there is no 1.3.x), and these are internal training
-artefacts with a **133-residue vocabulary**. The v1.2.2 image pinned `instanovo==1.2.2` from
-PyPI; that pin would build cleanly here and then fail at checkpoint load.
+**No released `instanovo` can load these checkpoints.** PyPI tops out at **1.2.2** (0.1.7,
+1.0.0, 1.1.0–1.1.4, 1.2.2 — there is no 1.3.x), and these are internal training artefacts with
+a 133-residue vocabulary. The v1.2.2 image pinned `instanovo==1.2.2` from PyPI; that pin would
+build cleanly here and then fail at checkpoint load.
 
-So `INSTANOVO_INSTALL_SPEC` has **no default** and the build fails immediately while it is
-empty. That is deliberate: failing at build is better than failing 20 minutes into a GPU run.
-Supply one of:
+So the image installs a wheel built from the internal repo and vendored into `wheels/`:
 
-```
-# preferred: a wheel built from the internal repo, staged on the inputs bucket.
-# No credentials in the manifest, and pinned by commit sha.
-INSTANOVO_INSTALL_SPEC: "https://<inputs-bucket>/wheels/instanovo-1.3.0.dev0+<sha>-py3-none-any.whl"
+| | |
+| --- | --- |
+| Built from | `InstaNovo-internal` `test/v1-3-133res-inference` @ **`fdd7c7d3300b`**, clean tree |
+| Wheel | `instanovo-1.3.0-py3-none-any.whl`, 200 KB, pure Python |
+| sha256 | `b14569c108471cc01e164c7a400adbfcef0143563d13044d6627577c65c1b0b1` |
+| Archived at | `s3://dtu-denovo-s-2e6da747d6d34f62-inputs/wheels/instanovo-1.3.0-fdd7c7d3300b/` |
 
-# alternative, if the build can carry a token as a secret
-INSTANOVO_INSTALL_SPEC: "instanovo @ git+https://<token>@github.com/instadeepai/InstaNovo-internal.git@<sha>"
-```
+It is **vendored rather than fetched from the bucket** because the install runs at *build* time
+and the image build has no bucket credentials. The bucket copy is the canonical archive; the two
+are identical by the checksum in `wheels/SHA256SUMS`, which the Dockerfile verifies with
+`sha256sum -c` before installing. A 200 KB pure-Python wheel in git is a deliberate trade for a
+build that needs no credentials and no network.
 
-Whichever is used, **record the commit sha** — it is part of what produced the numbers, and
-unlike a PyPI version it is not recoverable from the image afterwards.
+### One packaging bug had to be fixed first
 
-Two related consequences of moving off 1.2.2:
+A wheel built from that branch as it stood shipped **6** config files where the released 1.2.2
+wheel ships **31**. `[tool.setuptools.package-data]` listed `configs/*.yaml`, which matches one
+level only, so every config *group* was silently dropped — `inference/`, `residues/`,
+`dataset/`, `model/`, `accelerate/`, `finetune/`. Such a wheel installs and imports cleanly and
+then fails at run time when Hydra cannot find `configs/inference/default.yaml`. Fixed on the
+internal branch in `fdd7c7d3300b` by adding `configs/**/*.yaml`; the wheel now ships **44**
+config files, including all fourteen `v1_3_133res_*` inference configs.
+
+### Where the 133 residues actually live
+
+Worth knowing, because it is not where the branch name suggests. There is **no 133-residue
+config file** anywhere: the residues group on that branch holds 32 (`default`), 104
+(`pride_extended`) and 5 (`unit_test`) entries. The 133-entry vocabulary was passed as Hydra
+overrides in the *training* manifest (internal commit `0b2916531`, which added only
+`aichor_manifests/instanovoplus_4gpu.yaml`) and is baked into the checkpoints.
+
+What the branch contributes is the inference-side handling — `v1_3_133res_common.yaml`'s
+35-entry `suppressed_residues` list and 7 extra `residue_remapping` entries — and those are in
+the wheel. Inference does not need a residues config: the completed internal runs `4cc23918`
+and `3f3b282e` loaded these checkpoints with exactly this code and no such file.
+
+### Two consequences of leaving 1.2.2 behind
 
 - **The torch upper bound is gone.** `torch<2.6` existed because torch ≥ 2.6's restricted
   unpickler refuses `SETITEM` on the defaultdict inside the 1.2.x checkpoints. The v1.3
@@ -61,14 +83,15 @@ Two related consequences of moving off 1.2.2:
   `4cc23918`), so pinning below 2.6 would likely fail to load them.
 - **`HOSTED_PLATFORM_MARKERS` stripping is probably now unnecessary.** `run_sweep.py` strips
   `AICHOR_LOGS_PATH` because instanovo 1.2.2 only accepted the S3 endpoint as `S3_ENDPOINT`;
-  later versions read `AWS_ENDPOINT_URL`, which the platform sets. Harmless if left, but worth
-  deleting once the install spec is settled — the code comment already says so.
+  later versions read `AWS_ENDPOINT_URL`, which the platform sets. It is left in place because
+  removing it would edit the shared `run_sweep.py` and change the v1.2.2 runs' behaviour too;
+  the code comment already flags it as deletable. Worth checking on the first v1.3 run whether
+  TensorBoard logging is silently disabled by the stripping.
 
 ## Running
 
 ```bash
 ./aichor/instanovo_v1_3_0/manifests/use.sh greedy    # copies to the root manifest.yaml
-# fill in INSTANOVO_INSTALL_SPEC in manifest.yaml
 git commit -am "run: v1.3.0 greedy on nine-species balanced"
 aichor experiments submit local --repo-dir . --message "v1.3.0 greedy"
 ```
