@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
+kind: AIchorManifest
+apiVersion: 0.2.3
+builder:
+  image: proteobench-instanovo-v1-3-0
+  dockerfile: ./aichor/instanovo_v1_3_0/Dockerfile
+  context: .
+spec:
+  operator: jobset
+  image: proteobench-instanovo-v1-3-0
+
+  # Re-score predictions that already exist, with no GPU and no repeat of inference.
+  #
+  # greedy_refined (04c26560) finished inference and then died in the datapoint step on
+  # ProteoBench's N-terminal length bug: two predictions carried carbamylation and ammonia loss
+  # stacked on one terminus, where the length helper counted two scored positions and the
+  # tokenizer counted one, so collapse_aa_scores raised "All arrays must be of the same length".
+  # Fixed on this branch (cherry-pick of the upstream fix), so the existing raw_predictions.csv
+  # can simply be re-scored.
+  #
+  # --metrics-from takes MODE=PATH and is repeatable: add beam10_refined and
+  # knapsack_beam10_refined here as they land, rather than re-running their inference too.
+  command: >
+    cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
+    python run_sweep.py
+    --metrics-from greedy_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/04c26560-e328-41cf-9632-bd0df0d7b979/instanovo_v1_3_0_greedy_refined/runs/greedy_refined/samples/nine_species_balanced_De_Novo/raw_predictions.csv
+    --work-dir /workspace/proteobench_v130_rescore
+    --output-prefix instanovo_v1_3_0_rescored
+
+  types:
+    worker:
+      count: 1
+      completions: 1
+      parallelisms: 1
+      resources:
+        cpus: 8
+        ramRatio: 12
