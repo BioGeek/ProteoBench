@@ -25,6 +25,27 @@ what it is about without inferring it from the heading, and a slide that mixes c
 pooled internal table, the status matrices) says so explicitly rather than relying on a colour key.
 The build asserts that no slide containing a table or chart lacks one.
 
+## Status glyphs
+
+The run matrices use shape-distinct text glyphs, ordered by pipeline stage:
+
+| glyph | meaning |
+|---|---|
+| `○` | queued, not launched |
+| `▸` | inference running |
+| `⋯` | inference done, scoring |
+| `✓` | scored — contributes a number to this deck |
+| `✕` | deliberately not run |
+
+Two stages matter because a run has to finish inference *and* be scored through ProteoBench's
+scorer before it produces a comparable number, which is why `⋯` and `✓` are separate states.
+
+An earlier version used `●` `◐` `◑` `○`, where the two in-progress states differed only in which
+half of a circle was shaded — indistinguishable at slide size and carrying no meaning. The current
+set differs in shape, so it survives greyscale, projection and colour-vision deficiency. All five
+are plain text characters with broad font coverage; none is an emoji, so none brings its own colour
+(`font-variant-emoji: text` guards the arrow against emoji presentation).
+
 ## Charts
 
 Hand-built inline SVG rather than a plotting library, so the deck stays one self-contained file.

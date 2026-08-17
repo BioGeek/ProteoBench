@@ -153,11 +153,16 @@ STATUS = [
         }),
     ]),
 ]
+# Ordered by pipeline stage -- queued, inference, scoring, done -- so the legend reads as a
+# progression rather than an arbitrary list. Glyphs differ in SHAPE, not fill: the previous set
+# used half-filled circles for the two in-progress states, which differ only in which half is
+# shaded and are near-indistinguishable at slide size. Every glyph is a plain text character with
+# broad font coverage; none is an emoji, so none picks up its own colour.
 STATUS_STYLE = {
-    "done": ("●", "st-done", "scored"),
-    "scoring": ("◐", "st-scoring", "run done, scoring"),
-    "running": ("◑", "st-running", "running"),
-    "planned": ("○", "st-planned", "planned"),
+    "planned": ("○", "st-planned", "queued, not launched"),
+    "running": ("▸", "st-running", "inference running"),
+    "scoring": ("⋯", "st-scoring", "inference done, scoring"),
+    "done": ("✓", "st-done", "scored, in the numbers here"),
     "skipped": ("✕", "st-skipped", "deliberately not run"),
 }
 
@@ -448,7 +453,10 @@ def status_matrix() -> str:
         f'<span class="key"><b class="{cls}">{g}</b>{esc(t)}</span>' for g, cls, t in STATUS_STYLE.values()
     )
     note = (
-        "<p class='note'>The two benchmarks were swept at different beam widths &mdash; 10 on ProteoBench, "
+        "<p class='note'><b>Two stages per cell:</b> a run has to finish inference and then be scored "
+        "through ProteoBench's scorer before it contributes a number to this deck, which is why "
+        "<span class='st-scoring'>&#8943;</span> and <span class='st-done'>&#10003;</span> are separate. "
+        "The two benchmarks were swept at different beam widths &mdash; 10 on ProteoBench, "
         "5 internally, to match the knapsack run that already existed there &mdash; so their mode sets differ "
         "and are listed separately. The two internal knapsack cells are crossed rather than pending: the v1.3 "
         "knapsack beam-5 run cost <b>121 h</b> to test the one comparison that came back non-significant, so "
@@ -806,9 +814,13 @@ table.matrix{font-size:.44em; text-align:center;}
 table.matrix th{padding:.4em .3em; color:var(--text-secondary); font-weight:600; font-size:.92em;}
 table.matrix th.rowhead{text-align:left; white-space:nowrap; color:var(--text-primary);}
 table.matrix td{padding:.4em .3em; font-size:1.3em; border-bottom:1px solid var(--grid);}
-.st-done{color:var(--series-1);} .st-scoring{color:var(--series-2);}
-.st-running{color:var(--series-2); opacity:.75;} .st-planned{color:var(--text-muted);}
-.st-skipped{color:var(--text-muted); opacity:.8;}
+/* font-variant-emoji keeps the arrow a text glyph rather than a colour emoji */
+table.matrix td{font-variant-emoji:text;}
+.st-done{color:var(--series-1); font-weight:700;}
+.st-scoring{color:var(--series-2); font-weight:700; letter-spacing:-.02em;}
+.st-running{color:var(--series-2);}
+.st-planned{color:var(--text-muted);}
+.st-skipped{color:var(--text-muted);}
 .table-src{font-size:.44em !important; color:var(--text-secondary); margin:.55em 0 .35em;
  letter-spacing:.02em; font-weight:600;}
 .table-src:first-child{margin-top:0;}
