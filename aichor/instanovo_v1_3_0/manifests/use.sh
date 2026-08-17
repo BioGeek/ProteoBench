@@ -5,7 +5,7 @@
 #   git commit -am "run: v1.3.0 greedy on nine-species balanced"
 #   aichor experiments submit local --repo-dir . --message "v1.3.0 greedy"
 #
-# INSTANOVO_INSTALL_SPEC must be filled in first -- the build fails fast while it is empty.
+# No build args to fill in: the Dockerfile defaults to the vendored wheel in ../wheels/.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/../../.."
@@ -15,5 +15,3 @@ src="$here/${mode}.yaml"
 cp "$src" "$root/manifest.yaml"
 echo "manifest.yaml <- aichor/instanovo_v1_3_0/manifests/${mode}.yaml"
 grep -A3 '^  command:' "$root/manifest.yaml" | sed 's/^/  /'
-spec=$(python3 -c "import yaml,sys; print(yaml.safe_load(open('$root/manifest.yaml'))['builder']['buildArgs']['INSTANOVO_INSTALL_SPEC'])")
-[ -n "$spec" ] || echo "WARNING: INSTANOVO_INSTALL_SPEC is still empty; the build will fail by design." >&2
