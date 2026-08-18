@@ -54,7 +54,7 @@ PB_V130 = {
     # diffusion-only is the one mode that runs InstaNovo+ standalone with no transformer sequence to
     # start from, and the three refined modes share its checkpoint and are fine. Treated as a
     # harness fault under investigation, not a model result.
-    "diffusion_only": (0.1767, 0.0894, 0.4373, 15.52, "unsupported mode for this checkpoint"),
+    "diffusion_only": (0.1767, 0.0894, 0.4373, 15.52, "checkpoint cannot generate from noise"),
 }
 PB_V130_GREEDY = {"pep_mass": 0.695058, "pep_exact": 0.447481, "aa_mass": 0.834528, "hours": 1.87}
 
@@ -68,7 +68,7 @@ INTERNAL_V130 = [
     ("beam-10", 0.6545, 0.7931, 0.8857, "31 h 46 m", ""),
     ("knapsack beam-5", 0.6458, 0.7813, 0.8851, "121 h", ""),
     ("knapsack beam-5 + refinement", 0.6408, 0.7771, 0.8357, "8 h 57 m", ""),
-    ("diffusion only", 0.1164, 0.3698, 0.3149, "19 h 33 m", "unsupported mode for this checkpoint"),
+    ("diffusion only", 0.1164, 0.3698, 0.3149, "19 h 33 m", "checkpoint cannot generate from noise"),
 ]
 INTERNAL_V122 = [
     ("greedy", 0.6031, 0.7483, 0.8785, "5 h 51 m", ""),
@@ -792,8 +792,8 @@ slide(f"""
 {src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2 vs v1.3.0")}
 {pb_table()}
 <p class="note">v1.3.0 is shown where it has landed; <b>&middot;</b> marks a mode still in flight, and
-<b>*</b> marks v1.3.0 diffusion-only, now <b>diagnosed</b> (slide 8): an
-<b>unsupported mode</b> for that checkpoint, which also explains its 15.52 h against 2.8 h. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
+<b>*</b> marks v1.3.0 diffusion-only: this checkpoint <b>cannot generate
+from noise</b>, only refine (slide 8), which also explains its 15.52 h against 2.8 h. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
 each column &mdash; per metric <em>and</em> per checkpoint &mdash; and no mode sweeps them: on v1.2.2,
 knapsack beam-10 + refinement takes pep/mass, plain beam-10 + refinement takes pep/exact by <b>0.0001</b>,
 and diffusion-only takes aa/mass outright. GPU hours carry no bold: they are a cost, so "highest" would mark
@@ -890,11 +890,13 @@ never launched.</p>
 <p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> It <em>helps</em> v1.2.2 at
 beam-5 and hurts v1.3 at every width, in <b>0 of 17</b> datasets &mdash; same gate, same code, same data. A
 property of the checkpoint being refined, not of refinement.</p>
-<p class="note warn"><b>*v1.3 diffusion-only is diagnosed, and is not a result.</b> Its checkpoint has
-<b>200</b> diffusion timesteps against v1.2.2's <b>20</b>, so standalone decoding runs 200 passes from random
-noise while refinement runs 16 from a transformer seed &mdash; hence the refined modes are fine. Shortening
-the chain makes it <em>worse</em> (0.024 vs 0.140), so the cause is the <b>missing seed</b>, not the depth:
-an unsupported mode for this checkpoint.</p>
+<p class="note warn"><b>*v1.3 diffusion-only is not a result: this checkpoint cannot generate from
+noise.</b> Refinement corrects a transformer peptide over 16 steps; standalone must invent one from noise over
+the whole chain, which is <b>200</b> steps here against v1.2.2's <b>20</b>. Run in-distribution on its full
+chain it still gets <b>0.14</b> where a working model gets ~0.60 on this data, so the failure is the model's
+generation ability, not how we invoked it. Starting shallower is <em>worse</em> (0.024) &mdash; that rules out
+the shortcut, but not the cause: step 15 of a 200-step chain expects a near-clean sequence, so noise there is
+off-distribution regardless. <b>Whether the 200-step schedule is to blame is still open.</b></p>
 """)
 
 slide(f"""
@@ -1078,8 +1080,8 @@ internally for 7.2&times; the GPU. Beam-10 beats knapsack beam-5 outright.</li>
 <li>v1.3.0's ProteoBench gain is <b>confined to exact matching</b> (+0.034 to +0.046 across three modes,
 pep/mass within &plusmn;0.004) &mdash; modification and I/L calling, not backbone.</li>
 <li>Gated refinement's <b>sign depends on the checkpoint</b>: positive for v1.2.2, negative for v1.3 at
-every width. And v1.3 diffusion-only is an <b>unsupported mode</b>, not bad data &mdash; it needs a
-transformer seed that standalone decoding cannot give it.</li>
+every width. So v1.3's InstaNovo+ <b>earns its keep in neither mode</b> &mdash; it cannot generate from noise,
+and refining costs accuracy in 17 of 17 datasets.</li>
 <li>Confidence runs ~4.4 points over-confident at the operating threshold, worst on the hardest
 organisms, and recalibration does not fix the ranking. Cost transfers between checkpoints; accuracy does not.</li>
 </ul>
@@ -1087,8 +1089,10 @@ organisms, and recalibration does not fix the ranking. Cost transfers between ch
 <div>
 <h3>Open</h3>
 <ul>
-<li><b>Whether a 200-step InstaNovo+ can generate from noise at all.</b> v1.2.2's 20-step model can and
-v1.3's cannot, on the same training objective &mdash; a training question now, not an inference one.</li>
+<li><b>Why v1.3's InstaNovo+ underperforms in both modes.</b> v1.2.2's 20-step model generates from noise
+and refines profitably; v1.3's 200-step one does neither, on the same objective and selection metric. The
+schedule length is the leading suspect, <em>not</em> an established cause. Cheapest test: loss against
+<code>t</code> for both checkpoints &mdash; one validation pass, no training.</li>
 <li><b>Which split is canonical.</b> Our matrix runs on <code>ninespecies_v1</code>; a re-split exists and an
 earlier v1.2.2 evaluation used it. If it is the intended test set, both arms are on superseded data.</li>
 <li><b>Three v1.3.0 ProteoBench modes still running</b> (beam-10+ref, both knapsack) plus three internal
