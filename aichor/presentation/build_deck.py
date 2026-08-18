@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import html
 import pathlib
+import re
 
 OUT = pathlib.Path(__file__).parent / "index.html"
 
@@ -110,6 +111,18 @@ SCORER_DIFFS = [
     ("I/L", "forgiven by mass mode; toggles on exact", "unified in aa_er, commented out in precision"),
     ("empty prediction set", "handled via coverage", "precision returns 1.0"),
 ]
+
+# ── the verdict split by dataset group (spectrum-weighted) ──────────────────────────────
+# ProteoBench IS the same nine species, reprocessed and balanced, and the internal pooled figure
+# is ~90% nine-species by spectrum count -- so "two benchmarks" overstates their independence.
+# group, n spectra, v1.2.2, v1.3, mode
+GROUP_SPLIT = [
+    ("ninespecies_v1", 1_528_127, 0.5885, 0.5721, "greedy"),
+    ("biological", 174_160, 0.7310, 0.7005, "greedy"),
+    ("ninespecies_v1", 1_528_127, 0.6399, 0.6345, "beam-5"),
+    ("biological", 174_160, 0.7643, 0.7341, "beam-5"),
+]
+PB_BALANCED = (779_879, 0.6946, 0.695058)
 
 # ── Winnow calibration study, beam10 on ProteoBench (Notion sections 5, 15, 26) ─────────
 WINNOW_HEADLINE = [
@@ -703,14 +716,45 @@ slide(f"""
 {internal_table()}
 <p class="note">Pooled over 17 held-out sets, scored through ProteoBench's own scorer so the columns mean
 the same thing as the previous slides. <b>v1.2.2 leads at both beam widths</b> &mdash; greedy by
-<b>+0.0178</b>, beam-5 by <b>+0.0078</b> &mdash; which is the opposite verdict to ProteoBench's, on the same
-scorer. Beam search is worth <b>+0.0596</b> over greedy on v1.3, and remains the intervention that pays.</p>
+<b>+0.0178</b>, beam-5 by <b>+0.0078</b> &mdash; the opposite verdict to ProteoBench's, on the same scorer.
+The two are less independent than that phrasing suggests (next slide), but the disagreement survives it. Beam search is worth <b>+0.0596</b> over greedy on v1.3, and remains the intervention that pays.</p>
 <p class="note callout"><b>Knapsack is settled.</b> Plain beam-5 scores <b>0.6448</b> against knapsack
 beam-5's <b>0.6458</b> &mdash; <b>+0.0010 for 7.2&times; the GPU</b>, 16 h 50 m against 121 h. ProteoBench
 measured +0.0005 for the same comparison. Two benchmarks, same answer: the knapsack constraint is not worth
 running.</p>
 <p class="note warn">The <code>aa AUC</code> for any refined or diffusion-only row is inflated and must not be
 compared across rows: InstaNovo+ emits no per-token scores, so the peptide score is broadcast across residues.</p>
+""")
+
+slide(f"""
+<h2>The two benchmarks share their nine species &mdash; and still disagree</h2>
+{src("ProteoBench balanced v2 and internal ninespecies_v1 + biological", "greedy and beam-5", "spectrum-weighted")}
+<table class="data">
+<tr><th>dataset group</th><th>spectra</th><th>v1.2.2</th><th>v1.3</th><th>greedy &Delta;</th><th>beam-5 &Delta;</th></tr>
+<tr><td class="mode">internal `ninespecies_v1`</td><td class="num">1,528,127</td><td>0.5885</td><td>0.5721</td>
+    <td>&minus;1.64 pp</td><td>&minus;0.54 pp</td></tr>
+<tr><td class="mode">internal biological</td><td class="num">174,160</td><td>0.7310</td><td>0.7005</td>
+    <td class="best-cell">&minus;3.05 pp</td><td class="best-cell">&minus;3.02 pp</td></tr>
+<tr><td class="mode">ProteoBench balanced v2</td><td class="num">779,879</td><td>0.6946</td><td>0.6951</td>
+    <td>**+0.05 pp**</td><td>&mdash;</td></tr>
+</table>
+<div class="two-col">
+<div>
+<p class="note">ProteoBench <em>is</em> these nine species, reprocessed and balanced &mdash; 779,879 spectra
+against the internal set's 1,528,127, a factor of 1.96. And the internal pooled number is <b>90%
+nine-species by spectrum count</b>. So calling these "two benchmarks" overstates their independence: it is
+closer to the same nine species processed two ways, plus 174k of genuinely separate biological data.</p>
+</div>
+<div>
+<p class="callout">But the dataset version does <b>not</b> explain the disagreement. The <b>biological</b>
+sets are not nine-species at all, are untouched by any re-split or rebalancing, and are where v1.3 loses
+<b>most</b> &mdash; about 3 pp at both beam widths. If the internal deficit were an artefact of the v1
+processing, they should be neutral.</p>
+</div>
+</div>
+<p class="note">Also settled while checking: <code>extended_v13</code> trains on ACPT, phospho, PRIDE,
+MassiveKB and LCFM with a blacklist &mdash; <b>no nine-species data in training</b>. So v1.3's ProteoBench
+advantage is not leakage from a nine-species train split.</p>
 """)
 
 slide(f"""
@@ -971,21 +1015,32 @@ svg.chart .pt-label{font-size:12.5px; fill:var(--text-primary);}
 svg.chart .pt-label.emph{font-weight:700;}
 """
 
+# reveal.js is INLINED rather than linked, so index.html is a single shareable file with no
+# sibling directory and no network access at view time. vendor/ is kept for provenance and as the
+# source of these inlines.
+#
+# white.css's `@import url(./fonts/source-sans-pro/...)` is stripped: those font files are not
+# vendored, so the import can only 404. The deck sets its own system font stack regardless.
+VENDOR = pathlib.Path(__file__).parent / "vendor"
+_reveal_css = (VENDOR / "reveal.css").read_text()
+_theme_css = re.sub(r"@import\s+url\([^)]*\);", "", (VENDOR / "white.css").read_text())
+_reveal_js = (VENDOR / "reveal.js").read_text()
+
 HTML = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>InstaNovo on two benchmarks</title>
-<link rel="stylesheet" href="vendor/reveal.css">
-<link rel="stylesheet" href="vendor/white.css" id="theme">
+<style>{_reveal_css}</style>
+<style>{_theme_css}</style>
 <style>{CSS}</style>
 </head>
 <body>
 <div class="reveal"><div class="slides">
 {chr(10).join(SLIDES)}
 </div></div>
-<script src="vendor/reveal.js"></script>
+<script>{_reveal_js}</script>
 <script>
   Reveal.initialize({{hash:true, slideNumber:'c/t', width:1280, height:800, margin:0.06,
                      minScale:0.2, maxScale:1.6, transition:'fade'}});

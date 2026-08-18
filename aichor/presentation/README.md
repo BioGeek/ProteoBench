@@ -1,7 +1,15 @@
 # InstaNovo benchmarking deck
 
-`python build_deck.py` → `index.html`. Open it directly; reveal.js is vendored in `vendor/`, so
-there is no network dependency at presentation time.
+`python build_deck.py` → `index.html`. **A single self-contained file**: reveal.js's CSS and JS are
+inlined at build time, so `index.html` can be shared or emailed on its own — no `vendor/` directory
+beside it, and no network access when viewed.
+
+`vendor/` is kept as the provenance of those inlines (reveal.js 5.1.0) and is what `build_deck.py`
+reads. Two details make the inlining safe: `reveal.css` references only `data:` URIs, and
+`white.css`'s `@import url(./fonts/source-sans-pro/…)` is stripped, since those font files are not
+vendored and the import could only 404 — the deck sets its own system font stack anyway. The build
+checks that neither asset contains a literal `</script>` or `</style>` that would terminate the
+document early.
 
 Data-driven by design: runs are still landing, so updating the deck means editing the data tables
 at the top of `build_deck.py` and regenerating, not editing slides.
