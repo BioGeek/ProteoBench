@@ -47,6 +47,7 @@ PB_V130 = {
     "greedy": (0.695058, 0.447481, 0.834528, 1.87, ""),
     "beam10": (0.7295, 0.4677, 0.8651, 10.33, ""),
     "greedy_refined": (0.6927, 0.4461, 0.8343, 2.98, ""),
+    "beam10_refined": (0.7297, 0.4676, 0.8645, 20.28, ""),
     # Excluded from the cost chart and flagged in the table: this collapses on BOTH benchmarks
     # (0.1767 here, 0.1164 internally) while every other v1.3 mode lands within a couple of points
     # of its v1.2.2 counterpart. Coverage is 1.000, so predictions were made and parsed -- the model
@@ -56,6 +57,16 @@ PB_V130 = {
     # harness fault under investigation, not a model result.
     "diffusion_only": (0.1767, 0.0894, 0.4373, 15.52, "checkpoint cannot generate from noise"),
 }
+# PB_V122 mode label -> PB_V130 key. Shared by the paired table and the cost scatter; when these
+# were two separate dicts, adding a mode to one left the other quietly plotting stale data.
+PB_MODE_KEY = {
+    "greedy (1 beam)": "greedy",
+    "beam search (10)": "beam10",
+    "greedy + refinement": "greedy_refined",
+    "beam (10) + refinement": "beam10_refined",
+    "InstaNovo+ diffusion only": "diffusion_only",
+}
+
 PB_V130_GREEDY = {"pep_mass": 0.695058, "pep_exact": 0.447481, "aa_mass": 0.834528, "hours": 1.87}
 
 # ── internal held-out sets, pooled over all 17 (scored with ProteoBench's own scorer) ───
@@ -224,7 +235,7 @@ STATUS = [
         ("v1.2.2", dict.fromkeys(MODES_PB, "done")),
         ("v1.3.0", {
             "greedy": "done", "beam-10": "done", "greedy+ref": "done",
-            "beam-10+ref": "running", "knapsack-10": "running",
+            "beam-10+ref": "done", "knapsack-10": "running",
             "knapsack-10+ref": "running", "diffusion": "running",
         }),
     ]),
@@ -331,8 +342,6 @@ def cost_scatter() -> str:
     def py(v):
         return H - B - (v - y0) / (y1 - y0) * (H - B - T)
 
-    v130_key = {"greedy (1 beam)": "greedy", "beam search (10)": "beam10",
-                "greedy + refinement": "greedy_refined"}
     parts = []
     for gv in [0.69, 0.70, 0.71, 0.72, 0.73, 0.74]:
         parts.append(f'<line x1="{L}" y1="{py(gv):.1f}" x2="{W-R}" y2="{py(gv):.1f}" stroke="{C_GRID}" stroke-width="1"/>')
@@ -361,7 +370,7 @@ def cost_scatter() -> str:
         ldx, ldy = LABEL_OFF.get(name, (14, 4))
         parts.append(f'<text x="{cx+ldx:.1f}" y="{cy+ldy:.1f}" '
                      f'class="{"pt-label emph" if emph else "pt-label"}">{esc(name)}</text>')
-        key = v130_key.get(name)
+        key = PB_MODE_KEY.get(name)
         if key:
             v = PB_V130[key]
             if v[4]:
@@ -823,17 +832,11 @@ def pb_table() -> str:
     # PB_V122 columns: name, pep/mass, pep/exact, exact+IL, aa/mass, pep AUC, GPU hours
     # PB_V130 values:  pep/mass, pep/exact, aa/mass, GPU hours, flag
     i122 = (1, 2, 4)
-    v130_key = {
-        "greedy (1 beam)": "greedy",
-        "beam search (10)": "beam10",
-        "greedy + refinement": "greedy_refined",
-        "InstaNovo+ diffusion only": "diffusion_only",
-    }
     rows = []
     for r in PB_V122:
         name = r[0]
         arms = {"v1.2.2": {"vals": tuple(r[i] for i in i122), "gpu": f"{r[6]:g} h"}}
-        key = v130_key.get(name)
+        key = PB_MODE_KEY.get(name)
         if key is None:
             arms["v1.3.0"] = "in_flight"
         else:
@@ -906,8 +909,7 @@ slide(f"""
 <p class="lede">Two checkpoints &times; two benchmarks &times; the decoding modes that matter.</p>
 {status_matrix()}
 <p class="note">The v1.2.2 arm on ProteoBench is complete and is the reference everything else is read
-against; the v1.3.0 arm on the same data is three modes in, with three long knapsack and refined runs
-still going. Internally, seven of the nine variants are scored on at least one checkpoint. Internally both checkpoints
+against; the v1.3.0 arm on the same data is four modes in, with the two long knapsack runs still going. Internally, seven of the nine variants are scored on at least one checkpoint. Internally both checkpoints
 share one harness and one dataset list, so only the weights vary.</p>
 """)
 
@@ -968,24 +970,25 @@ against plain beam-10 + refinement at peptide/exact level:</p>
 """)
 
 slide(f"""
-<h2>Refinement helps or hurts depending on the checkpoint</h2>
+<h2>Refinement pays on v1.2.2 and not on v1.3</h2>
 {src("ProteoBench nine-species balanced, v1.2.2", "and internal held-out, 17 sets, both checkpoints",
       "pep/mass")}
 <table class="data compact">
 <tr><th>Change in pep/mass from adding refinement</th><th>v1.2.2 checkpoint</th><th>v1.3 checkpoint</th></tr>
 <tr><td>ProteoBench nine-species balanced</td>
     <td class="best-cell">win: <b>+0.0018 to +0.0039</b><br><span class="sub">greedy, beam-10, knapsack-10</span></td>
-    <td>loss: <b>&minus;0.0024</b><br><span class="sub">greedy; other widths in flight</span></td></tr>
+    <td>neutral: <b>&minus;0.0024</b> and <b>+0.0002</b><br><span class="sub">greedy, beam-10</span></td></tr>
 <tr><td>Internal held-out, 17 sets</td>
     <td class="best-cell">win: <b>+0.0049</b> pooled<br><span class="sub">beam-5; 11 of 17 datasets</span></td>
     <td>loss: <b>&minus;0.0029 to &minus;0.0051</b><br><span class="sub">greedy, beam-5, knapsack beam-5; 0 of 17</span></td></tr>
 </table>
 {refinement_delta_chart()}
-<p class="note">Win on both datasets for v1.2.2, loss on both for v1.3 &mdash; so the split is by
-checkpoint, not by dataset. The two also fail <em>differently</em>: v1.2.2 wins on average but with a wide
-spread and six real losses, worst <b>&minus;0.0325</b> on wound fluids, while v1.3 loses in <b>51 of 51</b>
-dataset-pair comparisons &mdash; all 17 datasets at each of three widths &mdash; tightly, within 0.01. Mixed
-and large against uniform and small.</p>
+<p class="note">The split is by <b>checkpoint, not by dataset</b>: refinement is a clear win on both datasets
+for v1.2.2, and never a win for v1.3. It is <em>neutral</em> for v1.3 on ProteoBench (&minus;0.0024 at greedy,
+&plus;0.0002 at beam-10 &mdash; both inside the noise) and <b>uniformly negative</b> on our own data, losing in
+<b>51 of 51</b> dataset-pair comparisons: all 17 datasets at each of three widths, tightly, within 0.01.
+v1.2.2 by contrast wins on average but with a wide spread and six real losses, worst <b>&minus;0.0325</b> on
+wound fluids. Mixed and large against uniform and small.</p>
 """)
 
 slide(f"""
@@ -1005,8 +1008,8 @@ slide(f"""
     ["v1.2.2", "v1.3.0"], [C_V122, C_V130],
     "pep/exact: v1.3.0 gains three to four points everywhere", vmin=0.39, vmax=0.48, height=250)}
 </div>
-<p class="note">Consistent across three modes: <b>pep/mass within &plusmn;0.004</b> (+0.0005 greedy, +0.0017
-beam-10, &minus;0.0037 greedy+ref) while <b>pep/exact gains +0.0338 to +0.0455</b>. Mass matching forgives
+<p class="note">Consistent across four modes: <b>pep/mass within &plusmn;0.004</b> (+0.0005 greedy, +0.0017
+beam-10, &minus;0.0037 greedy+ref, &minus;0.0020 beam-10+ref) while <b>pep/exact gains +0.0238 to +0.0455</b>. Mass matching forgives
 isobaric swaps and exact does not, so a gain confined to exact level points at <b>modification and I/L
 calls</b> &mdash; what a 133-residue vocabulary buys &mdash; with backbone sequencing unchanged.</p>
 """)
