@@ -621,80 +621,144 @@ def status_matrix() -> str:
     return "".join(tables) + f"<div class='legend'>{key}</div>{note}"
 
 
-def pb_table() -> str:
-    """The v1.2.2 sweep with v1.3.0 alongside, paired per metric.
+# Two states a cell can be in besides "here is a number". Distinct glyphs because they mean
+# opposite things: one run is coming, the other never will.
+IN_FLIGHT = "&middot;"
+NOT_RUN = "&mdash;"
 
-    Two-level header rather than ten flat columns: the reader compares within a metric, so the two
-    checkpoints belong adjacent. Best value is bolded per column, i.e. per metric AND per version --
-    no single mode wins everything, and bolding a row would assert a sweep the numbers deny.
-    GPU time carries no bold: it is a cost, so "highest" would mark the worst mode.
+
+def paired_table(metric_labels, rows, dense: bool = False) -> str:
+    """One row per decoding variant, two columns per metric -- one per checkpoint -- then two GPU columns.
+
+    The reader's question is always "what did this variant do on each checkpoint", so the two
+    checkpoints belong adjacent within a metric rather than in separate blocks or separate rows. That
+    also makes the run inventory legible in the same glance: a variant with a number on one side and
+    a marker on the other is a gap in the matrix, not a result.
+
+    `rows` is a list of (label, {"v1.2.2": arm, "v1.3.0": arm}), where an arm is either a dict with
+    `vals` (aligned to `metric_labels`), `gpu`, and an optional `flag`, or the string "in_flight" or
+    "not_run".
+
+    Bolding is per metric AND per checkpoint column. Never per row: no variant wins everything, so a
+    bolded row would assert a sweep the numbers deny. Flagged values are excluded from the contest --
+    a suspected fault should compete for neither best nor worst. GPU carries no bold at all, because
+    it is a cost and "highest" would mark the worst variant.
     """
-    metrics = [("pep/mass", 1, 0), ("pep/exact", 2, 1), ("aa/mass", 4, 2)]
-    v130_key = {"greedy (1 beam)": "greedy", "beam search (10)": "beam10",
-                "greedy + refinement": "greedy_refined", "InstaNovo+ diffusion only": "diffusion_only"}
+    versions = ("v1.2.2", "v1.3.0")
 
-    # best per column, computed separately for each version
+    def arm(row, ver):
+        return row[1].get(ver, "not_run")
+
+    # best per (metric, version), over arms that actually have a trustworthy number
     best = {}
-    for label, i122, i130 in metrics:
-        col122 = [m[i122] for m in PB_V122]
-        best[(label, "122")] = max(range(len(PB_V122)), key=lambda r: col122[r])
-        avail = [(r, PB_V130[v130_key[m[0]]][i130]) for r, m in enumerate(PB_V122)
-                 if m[0] in v130_key and not PB_V130[v130_key[m[0]]][4]]
-        best[(label, "130")] = max(avail, key=lambda x: x[1])[0] if avail else None
+    for mi, label in enumerate(metric_labels):
+        for ver in versions:
+            scored = [
+                (ri, a["vals"][mi])
+                for ri, r in enumerate(rows)
+                if isinstance((a := arm(r, ver)), dict) and not a.get("flag") and a["vals"][mi] is not None
+            ]
+            best[(mi, ver)] = max(scored, key=lambda x: x[1])[0] if scored else None
 
     head = (
-        "<tr><th rowspan='2'>Mode</th>"
-        + "".join(f"<th colspan='2'>{esc(l)}</th>" for l, _, _ in metrics)
-        + "<th rowspan='2'>GPU</th></tr>"
-        + "<tr>" + "".join("<th class='sub'>v1.2.2</th><th class='sub'>v1.3.0</th>" for _ in metrics) + "</tr>"
+        "<tr><th rowspan='2'>Variant</th>"
+        + "".join(f"<th colspan='2'>{esc(l)}</th>" for l in metric_labels)
+        + "<th colspan='2'>GPU hours</th></tr>"
+        + "<tr>"
+        + "".join(f"<th class='sub'>{v}</th>" for _ in range(len(metric_labels) + 1) for v in versions)
+        + "</tr>"
     )
-    rows = []
-    for ri, row in enumerate(PB_V122):
-        name, hours = row[0], row[6]
-        key = v130_key.get(name)
+
+    body = []
+    for ri, row in enumerate(rows):
         cells = []
-        for label, i122, i130 in metrics:
-            b = " class='best-cell'" if best[(label, "122")] == ri else ""
-            cells.append(f"<td{b}>{row[i122]:.4f}</td>")
-            if key is None:
-                cells.append("<td class='na' title='v1.3.0 run still in flight'>&middot;</td>")
-            else:
-                v, note = PB_V130[key][i130], PB_V130[key][4]
-                cls = " class='na'" if note else (" class='best-cell'" if best[(label, "130")] == ri else "")
-                cells.append(f"<td{cls}>{v:.4f}{'*' if note else ''}</td>")
-        rows.append(f"<tr><td class='mode'>{esc(name)}</td>{''.join(cells)}<td class='num cost'>{hours:g} h</td></tr>")
-    return f"<table class='data paired'>{head}{''.join(rows)}</table>"
+        for mi in range(len(metric_labels)):
+            for ver in versions:
+                a = arm(row, ver)
+                if a == "in_flight":
+                    cells.append(f"<td class='na' title='{ver} run still in flight'>{IN_FLIGHT}</td>")
+                elif a == "not_run":
+                    cells.append(f"<td class='na' title='deliberately not run on {ver}'>{NOT_RUN}</td>")
+                else:
+                    v, flag = a["vals"][mi], a.get("flag", "")
+                    cls = " class='na'" if flag else (" class='best-cell'" if best[(mi, ver)] == ri else "")
+                    cells.append(f"<td{cls}>{v:.4f}{'*' if flag else ''}</td>")
+        for ver in versions:
+            a = arm(row, ver)
+            mark = IN_FLIGHT if a == "in_flight" else NOT_RUN if a == "not_run" else esc(a["gpu"])
+            cls = "num cost na" if isinstance(a, str) else "num cost"
+            cells.append(f"<td class='{cls}'>{mark}</td>")
+        body.append(f"<tr><td class='mode'>{esc(row[0])}</td>{''.join(cells)}</tr>")
+
+    cls = "data paired dense" if dense else "data paired"
+    return f"<table class='{cls}'>{head}{''.join(body)}</table>"
+
+
+def pb_table() -> str:
+    """ProteoBench: the v1.2.2 sweep with v1.3.0 paired against it, mode by mode."""
+    # PB_V122 columns: name, pep/mass, pep/exact, exact+IL, aa/mass, pep AUC, GPU hours
+    # PB_V130 values:  pep/mass, pep/exact, aa/mass, GPU hours, flag
+    i122 = (1, 2, 4)
+    v130_key = {
+        "greedy (1 beam)": "greedy",
+        "beam search (10)": "beam10",
+        "greedy + refinement": "greedy_refined",
+        "InstaNovo+ diffusion only": "diffusion_only",
+    }
+    rows = []
+    for r in PB_V122:
+        name = r[0]
+        arms = {"v1.2.2": {"vals": tuple(r[i] for i in i122), "gpu": f"{r[6]:g} h"}}
+        key = v130_key.get(name)
+        if key is None:
+            arms["v1.3.0"] = "in_flight"
+        else:
+            v = PB_V130[key]
+            arms["v1.3.0"] = {"vals": (v[0], v[1], v[2]), "gpu": f"{v[3]:g} h", "flag": v[4]}
+        rows.append((name, arms))
+    return paired_table(["pep/mass", "pep/exact", "aa/mass"], rows)
 
 
 def internal_table(dense: bool = False) -> str:
-    """One row per scored internal run, grouped by checkpoint.
+    """The internal held-out sets, in the same paired shape as the ProteoBench table.
 
-    All thirteen runs in one table rather than a per-arm pair, because the finding that matters is a
-    cross-arm one: v1.2.2 leads at every width it was run at, and refinement's sign flips between the
-    two checkpoints. Bold marks the best value within each checkpoint's block, so the two blocks can
-    be read separately without implying a cross-block winner. Flagged rows carry an asterisk instead
-    of bold-eligible numbers -- v1.3's diffusion-only is a suspected fault, not a result, and letting
-    it compete for "worst" would be as misleading as letting it compete for "best".
+    Nine variants rather than the thirteen scored runs, because the thirteen are the two arms'
+    variants interleaved and the comparison that matters is across arms at a fixed variant. Two
+    variants were deliberately never run on v1.2.2 -- knapsack beam-5 cost 121 h on v1.3 and was
+    judged not worth repeating on older weights -- and those cells say so rather than sitting blank.
     """
-    head = ("<tr><th>Mode</th><th>checkpoint</th><th>pep/mass</th><th>aa/mass</th>"
-            "<th>pep AUC</th><th>wall clock</th></tr>")
+    # INTERNAL_* rows: name, pep/mass, aa/mass, pep AUC, wall clock, flag
+    by_ver = {
+        "v1.2.2": {r[0]: r for r in INTERNAL_V122},
+        "v1.3.0": {r[0]: r for r in INTERNAL_V130},
+    }
+    # Cheapest first, each refined variant directly after the base it refines.
+    order = [
+        "greedy", "greedy + refinement",
+        "beam-5", "beam-5 + refinement",
+        "beam-10", "beam-10 + refinement",
+        "knapsack beam-5", "knapsack beam-5 + refinement",
+        "diffusion only",
+    ]
+    # Everything absent is either still running or a decision; say which.
+    state = {
+        ("v1.2.2", "greedy + refinement"): "in_flight",
+        ("v1.2.2", "beam-10 + refinement"): "in_flight",
+        ("v1.3.0", "beam-10 + refinement"): "in_flight",
+        ("v1.2.2", "knapsack beam-5"): "not_run",
+        ("v1.2.2", "knapsack beam-5 + refinement"): "not_run",
+    }
     rows = []
-    for data, ckpt, colour in ((INTERNAL_V122, "v1.2.2", C_V122), (INTERNAL_V130, "v1.3", C_V130)):
-        clean = [r for r in data if not r[5]]
-        best = {i: max(r[i] for r in clean) for i in (1, 2, 3)}
-        for name, pm, aa, auc, wall, flag in data:
-            cells = []
-            for i, v in ((1, pm), (2, aa), (3, auc)):
-                txt = f"{v:.4f}" + ("*" if flag else "")
-                cells.append(f"<td>{'<b>' + txt + '</b>' if not flag and v == best[i] else txt}</td>")
-            rows.append(
-                f"<tr><td class='mode'>{esc(name)}</td>"
-                f"<td><span class='dot' style='background:{colour}'></span>{esc(ckpt)}</td>"
-                + "".join(cells)
-                + f"<td class='num'>{esc(wall)}</td></tr>"
-            )
-    cls = "data dense" if dense else "data"
-    return f"<table class='{cls}'>{head}{''.join(rows)}</table>"
+    for name in order:
+        arms = {}
+        for ver in ("v1.2.2", "v1.3.0"):
+            r = by_ver[ver].get(name)
+            if r is None:
+                arms[ver] = state.get((ver, name), "in_flight")
+            else:
+                arms[ver] = {"vals": (r[1], r[2], r[3]), "gpu": r[4], "flag": r[5]}
+        rows.append((name, arms))
+    return paired_table(["pep/mass", "aa/mass", "pep AUC"], rows, dense=dense)
 
 
 # ══ slides ═════════════════════════════════════════════════════════════════════════════
@@ -719,7 +783,7 @@ slide(f"""
 {status_matrix()}
 <p class="note">The v1.2.2 arm on ProteoBench is complete and is the reference everything else is read
 against; the v1.3.0 arm on the same data is three modes in, with three long knapsack and refined runs
-still going. Internally <b>thirteen of the sixteen runs are scored</b> and only three refined modes remain. Internally both checkpoints
+still going. Internally, seven of the nine variants are scored on at least one checkpoint. Internally both checkpoints
 share one harness and one dataset list, so only the weights vary.</p>
 """)
 
@@ -731,9 +795,10 @@ slide(f"""
 <b>*</b> marks v1.3.0 diffusion-only, whose 0.1767 is a <b>suspected harness fault</b> &mdash; it collapses on
 both benchmarks (0.1164 internally) while every other v1.3 mode lands within a couple of points of its
 v1.2.2 counterpart, at coverage 1.000. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
-each column, and no mode sweeps them: on v1.2.2, knapsack beam-10 + refinement takes pep/mass, plain
-beam-10 + refinement takes pep/exact by <b>0.0001</b>, and diffusion-only takes aa/mass outright. GPU time is
-a cost, so it carries no winner.</p>
+each column &mdash; per metric <em>and</em> per checkpoint &mdash; and no mode sweeps them: on v1.2.2,
+knapsack beam-10 + refinement takes pep/mass, plain beam-10 + refinement takes pep/exact by <b>0.0001</b>,
+and diffusion-only takes aa/mass outright. GPU hours carry no bold: they are a cost, so "highest" would mark
+the worst mode.</p>
 <p class="note warn">Treat the two leads over plain beam-10 + refinement as ties, not results. The paired
 test on the pep/exact pair is the single <b>non-significant</b> comparison of 42 (next slide): +0.000099,
 95% CI &minus;0.000503 to +0.000671. The bold marks the larger number, not a real difference.</p>
@@ -821,8 +886,10 @@ slide(f"""
 {internal_table(dense=True)}
 <p class="note"><b>v1.2.2 leads at every width</b> &mdash; greedy <b>+0.0179</b>, beam-5 <b>+0.0078</b>,
 beam-10 <b>+0.0062</b> &mdash; the opposite verdict to ProteoBench's, on the same scorer. Beam width still
-pays; the knapsack constraint still does not, and <b>beam-10 beats knapsack beam-5 outright</b> for a quarter
-of the GPU.</p>
+pays; the knapsack constraint still does not, and <b>beam-10 beats knapsack beam-5 outright</b> at a quarter
+of the GPU. Bold is per metric <em>and</em> per checkpoint; <b>&middot;</b> is a run still in flight and
+<b>&mdash;</b> one deliberately never launched (knapsack cost 121 h on v1.3, not worth repeating on older
+weights).</p>
 <p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> It <em>helps</em> v1.2.2 at beam-5
 (<b>0.6575</b> vs <b>0.6526</b>) and hurts v1.3 at every width, in <b>0 of 17</b> datasets &mdash; same gate,
 same code, same data. A property of the checkpoint refined, not of refinement.</p>
