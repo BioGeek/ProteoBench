@@ -145,3 +145,38 @@ both checkpoints have been scored. Adding facets is a matter of adding entries t
 including both beam-5 arms. Pairs that will never exist should stay absent rather than blank:
 `v1_2_2_test_knapsack_beam5` was deliberately not launched, so there is no v1.2.2 counterpart for the
 knapsack facet on the internal sets.
+
+## Checking the layout
+
+`tools/check_layout.sh [WIDTH,HEIGHT]` renders the deck in headless Chrome and reports layout
+defects. Run it after any content edit; the deck is written by hand and the failures below were all
+introduced by adding prose, not by the tooling.
+
+Three passes, because the first one alone gave a false all-clear:
+
+| pass | what it catches |
+|------|-----------------|
+| `fit` | Slides spilling past the window, and slides that only fit by rendering small |
+| `overlap` | Two chart labels on top of each other; any label drawn outside its `viewBox` |
+| `geometry` | A label sitting on a data marker, or struck through by a connector line |
+
+**Why three.** A section-relative overflow check reports nothing, ever: reveal.js *grows* a section
+to fit its content, so the content never overflows the section — it overflows the **window**, because
+reveal only ever computes its scale for the authored 1280×800. Eight slides were spilling up to
+531px below the fold while a naive check called them clean. The `fit` pass measures against the
+viewport instead.
+
+The deck now also shrinks to fit: on `slidechanged` it tells reveal the slide is as tall as its
+content actually is, and reveal's own `min(availW/width, availH/height)` scale does the rest. That
+makes spill impossible, so `fit` additionally reports each slide's scale as a fraction of the deck
+baseline — a slide that "fits" at 46% of normal type size is not fixed, it is hidden. Below ~0.88 the
+content needs cutting.
+
+`overlap` and `geometry` exist because neither is visible to a height measurement. A dashed trend
+line running through a point label, or a label resting on its own marker, is exactly as broken as
+text off the edge, and both were present on the cost scatter.
+
+**Known and accepted:** slide 8 renders at 83% of baseline. It carries the thirteen-run table, and
+the alternative is dropping a column or splitting the table across two slides; at 83% every cell is
+still comfortably legible. Grid lines are excluded from `geometry` — a label crossing a faint
+gridline is ordinary chart practice.

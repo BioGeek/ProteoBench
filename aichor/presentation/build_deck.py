@@ -118,12 +118,12 @@ RECON_V122_GREEDY = [
     ("snakevenoms", 0.2033, 0.2032), ("woundfluids", 0.3574, 0.3571),
 ]
 SCORER_DIFFS = [
-    ("cumulative mass tolerance", "50 ppm", "0.5 Da"),
-    ("individual residue tolerance", "20 ppm", "0.1 Da"),
-    ("unit", "ppm", "Dalton"),
-    ("peptide criterion", "prefix + suffix alignment", "equal length, all residues matched"),
-    ("I/L", "forgiven by mass mode; toggles on exact", "unified in aa_er, commented out in precision"),
-    ("empty prediction set", "handled via coverage", "precision returns 1.0"),
+    ("cumulative tolerance", "50 ppm", "0.5 Da"),
+    ("per-residue tolerance", "20 ppm", "0.1 Da"),
+    ("unit", "ppm (relative)", "Dalton (absolute)"),
+    ("peptide criterion", "prefix + suffix alignment", "equal length, all matched"),
+    ("I/L", "mass forgives, exact toggles", "unified in aa_er only"),
+    ("empty prediction", "handled via coverage", "precision returns 1.0"),
 ]
 
 # ── the verdict split by dataset group (spectrum-weighted) ──────────────────────────────
@@ -249,6 +249,24 @@ def svg(width: int, height: int, body: str, label: str) -> str:
     )
 
 
+# Label offsets from each marker, as (dx, dy). Three separate collisions forced these:
+#   * greedy and greedy + refinement are 0.0018 apart -- 11px here -- and their labels overlapped;
+#   * greedy's label then landed on the v1.3.0 marker of the same mode, 0.0005 below it;
+#   * the frontier polyline runs nearly flat from beam-10 rightwards, so any label placed level with
+#     those markers is struck through by it -- those go above the marker instead.
+# Verified by a headless pass that tests every label box against every marker and line segment.
+LABEL_OFF = {
+    # 24px down still grazed the v1.3.0 greedy+refinement marker, which sits 11px below and 21px
+    # right of this one; 34px clears it. Four markers land inside 25px here because the x-axis
+    # starts at zero and every cheap mode costs 1.5-3 h.
+    "greedy (1 beam)": (14, 34),
+    "greedy + refinement": (14, -13),
+    "beam search (10)": (14, 18),
+    "beam (10) + refinement": (14, -13),
+    "knapsack beam (10)": (14, 5),
+}
+
+
 def cost_scatter() -> str:
     """pep/mass against GPU hours, both checkpoints.
 
@@ -259,7 +277,7 @@ def cost_scatter() -> str:
     result that is not one.
     """
     W, H = 900, 430
-    L, R, T, B = 70, 290, 24, 52
+    L, R, T, B = 70, 290, 46, 52
     x0, x1 = 0, 38
     y0, y1 = 0.685, 0.740
 
@@ -296,7 +314,9 @@ def cost_scatter() -> str:
             f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="7" fill="{C_V122}" stroke="var(--surface-1)" stroke-width="2">'
             f"<title>v1.2.2 {esc(name)}: {pm:.4f} pep/mass, {hours:g} GPU h</title></circle>"
         )
-        parts.append(f'<text x="{cx+14:.1f}" y="{cy+4:.1f}" class="{"pt-label emph" if emph else "pt-label"}">{esc(name)}</text>')
+        ldx, ldy = LABEL_OFF.get(name, (14, 4))
+        parts.append(f'<text x="{cx+ldx:.1f}" y="{cy+ldy:.1f}" '
+                     f'class="{"pt-label emph" if emph else "pt-label"}">{esc(name)}</text>')
         key = v130_key.get(name)
         if key:
             v = PB_V130[key]
@@ -309,7 +329,8 @@ def cost_scatter() -> str:
                 f"<title>v1.3.0 {esc(name)}: {v[0]:.4f} pep/mass, {v[3]:g} GPU h</title></circle>"
             )
     parts.append(f'<text x="{(L+W-R)/2:.0f}" y="{H-6}" text-anchor="middle" class="axis-title">GPU hours</text>')
-    parts.append(f'<text x="16" y="{T+8}" class="axis-title">pep/mass precision</text>')
+    # Above the plot, not beside it: at x=16 this collided with the topmost tick label.
+    parts.append(f'<text x="{L-58}" y="18" class="axis-title">pep/mass precision</text>')
     legend = (f'<span class="key"><i style="background:{C_V122}"></i>v1.2.2</span>'
               f'<span class="key"><i style="background:{C_V130}"></i>v1.3.0</span>'
               f'<span class="key muted">connected pairs are the same mode</span>')
@@ -361,7 +382,7 @@ def grouped_bars(rows, series_labels, colors, title_label, fmt="{:.4f}", vmin=No
 def species_bars() -> str:
     """Over-confidence per species: magnitude, one series, sorted -- horizontal bars."""
     W, H = 900, 400
-    L, R, T, B = 250, 90, 16, 34
+    L, R, T, B = 250, 90, 16, 52
     rows = sorted(WINNOW_SPECIES, key=lambda r: (r[3] - r[2]), reverse=True)
     hi = 0.10
     row_h = (H - T - B) / len(rows)
@@ -416,8 +437,10 @@ def decile_bars() -> str:
         parts.append(f'<text x="{cx:.1f}" y="{vy:.1f}" text-anchor="middle" class="bar-label">{gap:+.3f}</text>')
         parts.append(f'<text x="{cx:.1f}" y="{H-B+34}" text-anchor="middle" class="tick strong">{esc(label)}</text>')
     parts.append(f'<line x1="{L}" y1="{mid:.1f}" x2="{W-R}" y2="{mid:.1f}" stroke="var(--text-secondary)" stroke-width="2"/>')
-    parts.append(f'<text x="{W-R}" y="{mid-10:.1f}" text-anchor="end" class="tick">over-confident ↑</text>')
-    parts.append(f'<text x="{W-R}" y="{mid+22:.1f}" text-anchor="end" class="tick">under-confident ↓</text>')
+    # Anchored to the right edge these sat on the last decile's bar label, whose gap (+0.003) puts
+    # it right against the zero line. Moved to the left margin, where no bar reaches.
+    parts.append(f'<text x="{L+6}" y="{T+14}" class="tick">over-confident ↑</text>')
+    parts.append(f'<text x="{L+6}" y="{H-B-6}" class="tick">under-confident ↓</text>')
     return svg(W, H, "".join(parts), "Calibration gap by score decile, sign changes across the range")
 
 
@@ -505,6 +528,13 @@ def per_dataset_dumbbell() -> str:
     return f'<div class="legend">{legend}</div>' + svg(W, H, "".join(parts), "Per-dataset peptide recall, v1.2.2 against v1.3.0, greedy decoding")
 
 
+# Five datasets diverge by more than 0.004, but ricebean, bacillus and yeast sit inside 0.005 of
+# each other on both axes: labelling any of them puts text over the other two's markers. Only the
+# two well-separated divergences are labelled; every point keeps its full <title> on hover, and the
+# note carries the cluster's size.
+SCORER_LABEL_SKIP = {"bacillus", "yeast", "ricebean"}
+
+
 def scorer_agreement() -> str:
     """The same predictions under both scorers, against y = x.
 
@@ -537,8 +567,14 @@ def scorer_agreement() -> str:
             f'stroke-width="2"><title>{esc(name)}: InstaNovo {ins:.4f}, ProteoBench {pb:.4f} '
             f'({pb-ins:+.4f})</title></circle>'
         )
-        if abs(pb - ins) > 0.004:
-            parts.append(f'<text x="{px(ins)+11:.1f}" y="{py(pb)+4:.1f}" class="pt-label">{esc(name)} {pb-ins:+.4f}</text>')
+        # ricebean, bacillus and yeast sit within 0.005 of each other on both axes, so labelling
+        # all three stacks them. Label only the largest divergence in each cluster; every point
+        # keeps its full <title> on hover.
+        # Every labelled point is ABOVE the identity line, and that line rises to the right at
+        # 45 degrees -- so a label to the right gets struck through. Upper-LEFT is clear.
+        if abs(pb - ins) > 0.004 and name not in SCORER_LABEL_SKIP:
+            parts.append(f'<text x="{px(ins)-11:.1f}" y="{py(pb)-7:.1f}" text-anchor="end" '
+                         f'class="pt-label">{esc(name)} {pb-ins:+.4f}</text>')
     parts.append(f'<text x="{(L+W-R)/2:.0f}" y="{H-6}" text-anchor="middle" class="axis-title">InstaNovo Metrics — 0.5 / 0.1 Da</text>')
     parts.append(f'<text x="14" y="{T+6}" class="axis-title">ProteoBench — 50 / 20 ppm</text>')
     return svg(W, H, "".join(parts), "Peptide recall per dataset under both scorers, against the identity line")
@@ -549,7 +585,7 @@ def scorer_table() -> str:
     rows = "".join(
         f"<tr><td class='mode'>{esc(a)}</td><td>{b}</td><td>{c}</td></tr>" for a, b, c in SCORER_DIFFS
     )
-    return f"<table class='data'>{head}{rows}</table>"
+    return f"<table class='data dense'>{head}{rows}</table>"
 
 
 def status_matrix() -> str:
@@ -630,7 +666,7 @@ def pb_table() -> str:
     return f"<table class='data paired'>{head}{''.join(rows)}</table>"
 
 
-def internal_table() -> str:
+def internal_table(dense: bool = False) -> str:
     """One row per scored internal run, grouped by checkpoint.
 
     All thirteen runs in one table rather than a per-arm pair, because the finding that matters is a
@@ -657,7 +693,8 @@ def internal_table() -> str:
                 + "".join(cells)
                 + f"<td class='num'>{esc(wall)}</td></tr>"
             )
-    return f"<table class='data'>{head}{''.join(rows)}</table>"
+    cls = "data dense" if dense else "data"
+    return f"<table class='{cls}'>{head}{''.join(rows)}</table>"
 
 
 # ══ slides ═════════════════════════════════════════════════════════════════════════════
@@ -687,16 +724,16 @@ share one harness and one dataset list, so only the weights vary.</p>
 """)
 
 slide(f"""
-<h2>Decoding choice moves accuracy more than anything else</h2>
+<h2>Decoding choice moves accuracy most</h2>
 {src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2 vs v1.3.0")}
 {pb_table()}
 <p class="note">v1.3.0 is shown where it has landed; <b>&middot;</b> marks a mode still in flight, and
 <b>*</b> marks v1.3.0 diffusion-only, whose 0.1767 is a <b>suspected harness fault</b> &mdash; it collapses on
 both benchmarks (0.1164 internally) while every other v1.3 mode lands within a couple of points of its
 v1.2.2 counterpart, at coverage 1.000. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
-each column: no mode sweeps them. Knapsack beam-10 + refinement takes pep/mass, exact+IL and AUC; plain
-beam-10 + refinement takes pep/exact by <b>0.0001</b>; diffusion-only takes aa/mass outright. GPU time is a
-cost, so it carries no winner.</p>
+each column, and no mode sweeps them: on v1.2.2, knapsack beam-10 + refinement takes pep/mass, plain
+beam-10 + refinement takes pep/exact by <b>0.0001</b>, and diffusion-only takes aa/mass outright. GPU time is
+a cost, so it carries no winner.</p>
 <p class="note warn">Treat the two leads over plain beam-10 + refinement as ties, not results. The paired
 test on the pep/exact pair is the single <b>non-significant</b> comparison of 42 (next slide): +0.000099,
 95% CI &minus;0.000503 to +0.000671. The bold marks the larger number, not a real difference.</p>
@@ -757,6 +794,7 @@ held-out sets the same operation on the v1.3 checkpoint is <b>negative in 17 of 
 slide(f"""
 <h2>v1.2.2 vs v1.3.0 on ProteoBench: the gain is all in <em>exact</em></h2>
 {src("ProteoBench nine-species balanced", "779,879 spectra", "three modes", "v1.2.2 vs v1.3.0")}
+<div class="stack2">
 {grouped_bars(
     [("greedy", [0.6946, PB_V130["greedy"][0]]),
      ("beam-10", [0.7278, PB_V130["beam10"][0]]),
@@ -769,38 +807,28 @@ slide(f"""
      ("greedy+ref", [0.4123, PB_V130["greedy_refined"][1]])],
     ["v1.2.2", "v1.3.0"], [C_V122, C_V130],
     "pep/exact: v1.3.0 gains three to four points everywhere", vmin=0.39, vmax=0.48, height=250)}
-<p class="note">Three modes now, and the split is consistent: <b>pep/mass within &plusmn;0.004</b> (+0.0005
-greedy, +0.0017 beam-10, &minus;0.0037 greedy+ref) while <b>pep/exact gains +0.0338 to +0.0455</b>. Mass
-matching forgives isobaric swaps and exact does not, so a gain that appears only at exact level points at
-<b>modification and I/L calls</b> &mdash; what a 133-residue vocabulary buys &mdash; with backbone
-sequencing unchanged. It held when tested at beam width, including in a mode whose pep/mass went the other
-way.</p>
+</div>
+<p class="note">Consistent across three modes: <b>pep/mass within &plusmn;0.004</b> (+0.0005 greedy, +0.0017
+beam-10, &minus;0.0037 greedy+ref) while <b>pep/exact gains +0.0338 to +0.0455</b>. Mass matching forgives
+isobaric swaps and exact does not, so a gain confined to exact level points at <b>modification and I/L
+calls</b> &mdash; what a 133-residue vocabulary buys &mdash; with backbone sequencing unchanged.</p>
 """)
 
 slide(f"""
-<h2>On our own data, the older checkpoint is ahead at every width</h2>
-{src("Internal held-out, 17 sets", "1,702,287 spectra pooled", "ProteoBench scorer")}
-{internal_table()}
-<p class="note">All thirteen scored runs, pooled over 17 held-out sets, through ProteoBench's own scorer so
-the columns mean the same thing as the earlier slides. <b>v1.2.2 leads at every beam width it was run at</b>
-&mdash; greedy <b>+0.0179</b>, beam-5 <b>+0.0078</b>, beam-10 <b>+0.0062</b> &mdash; the opposite verdict to
-ProteoBench's, on the same scorer. The two benchmarks are less independent than that phrasing suggests (next
-slide), but the disagreement survives it. Beam search remains the intervention that pays: <b>+0.0693</b> from
-greedy to beam-10 on v1.3, <b>+0.0576</b> on v1.2.2.</p>
-<p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> On v1.2.2 it <em>helps</em>
-&mdash; beam-5 + refinement <b>0.6575</b> against beam-5's <b>0.6526</b>, and it is that arm's best pep/mass
-after beam-10. On v1.3 it hurts at every width: greedy &minus;0.0029, beam-5 &minus;0.0049, knapsack beam-5
-&minus;0.0050, and in <b>0 of 17</b> datasets does it help. Same InstaNovo+ gate (0.9), same code, same data
-&mdash; so this is a property of the transformer checkpoint being refined, not of refinement. The practical
-reading: refinement should be <b>off</b> for v1.3, not merely retuned.</p>
-<p class="note warn"><b>*v1.3 diffusion-only is a suspected harness fault, not a result.</b> 0.1164 pep/mass
-against v1.2.2's 0.5885 on identical data, pep AUC 0.3149, at coverage 0.9999 &mdash; so predictions were
-made and parsed, and were simply wrong at scale. It also took <b>19 h 33 m</b> against v1.2.2's 8 h 24 m on
-the same hardware. The same collapse appears on ProteoBench (0.1767 against 0.7142), and the three v1.3
-refined modes share this checkpoint and are fine, which points at the standalone InstaNovo+ path rather than
-the weights. Under investigation; excluded from every comparison here.</p>
-<p class="note warn">The <code>aa AUC</code> for any refined or diffusion-only row is inflated and must not be
-compared across rows: InstaNovo+ emits no per-token scores, so the peptide score is broadcast across residues.</p>
+<h2>On our own data, v1.2.2 is ahead at every width</h2>
+{src("Internal held-out, 17 sets", "1,702,287 spectra pooled", "ProteoBench scorer",
+      "aa AUC not comparable across refined rows")}
+{internal_table(dense=True)}
+<p class="note"><b>v1.2.2 leads at every width</b> &mdash; greedy <b>+0.0179</b>, beam-5 <b>+0.0078</b>,
+beam-10 <b>+0.0062</b> &mdash; the opposite verdict to ProteoBench's, on the same scorer. Beam width still
+pays; the knapsack constraint still does not, and <b>beam-10 beats knapsack beam-5 outright</b> for a quarter
+of the GPU.</p>
+<p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> It <em>helps</em> v1.2.2 at beam-5
+(<b>0.6575</b> vs <b>0.6526</b>) and hurts v1.3 at every width, in <b>0 of 17</b> datasets &mdash; same gate,
+same code, same data. A property of the checkpoint refined, not of refinement.</p>
+<p class="note warn"><b>*v1.3 diffusion-only is a suspected fault</b>, not a result: 0.1164 at coverage 0.9999,
+and 19 h 33 m against 8 h 24 m. It collapses on ProteoBench too, while the refined modes sharing its
+checkpoint are fine.</p>
 """)
 
 slide(f"""
@@ -835,21 +863,17 @@ advantage is not leakage from a nine-species train split.</p>
 """)
 
 slide(f"""
-<h2>Per dataset, the greedy comparison is not close to uniform</h2>
+<h2>Per dataset, the comparison is far from uniform</h2>
 {src("Internal held-out, 17 sets", "per dataset", "greedy decoding", "ProteoBench scorer, peptide/mass")}
 {per_dataset_dumbbell()}
-<p class="note">Unweighted mean across the 17 sets: <b>0.5883 &rarr; 0.5781</b>, i.e. v1.3.0 behind by
-<b>1.02 pp</b>, ahead in only <b>5 of 17</b>. The wins are large and concentrated &mdash; herceptin
-<b>+7.2</b>, immuno <b>+3.2</b> &mdash; and both are antibody or immunopeptide samples. The losses are broad,
-with human <b>&minus;6.2</b> and gluc <b>&minus;4.3</b>. Spectrum-weighted pooling gives a wider gap still
-(0.6031 &rarr; 0.5852), because the large <code>ninespecies</code> sets are where v1.2.2 leads.</p>
-<p class="note warn"><b>Resolved: the conflicting chart compares two different data splits.</b> It reports
-these greedy means as 0.5745 &rarr; 0.5772 (v1.3.0 <em>ahead</em> by 0.27 pp). Its v1.3 side is exactly our
-run; its v1.2.2 side was copied from a workbook tab named <code>instanovo_1_2_2_with_new_splits</code> &mdash;
-a v1.2.2 evaluation on the <b>re-split</b> data. The residual proves it: <b>&minus;0.0186</b> mean on the nine
-<code>ninespecies</code> sets, which are split 80/10/10, against <b>&minus;0.0022</b> on the eight biological
-sets, which are test-only and cannot be re-split. Both arms here share one <code>pipeline.yaml</code> and
-therefore one split, so this comparison is internally consistent.</p>
+<p class="note">Unweighted mean: <b>0.5883 &rarr; 0.5781</b>, v1.3.0 behind by <b>1.02 pp</b> and ahead in
+only <b>5 of 17</b>. The wins are large and concentrated on antibody and immunopeptide samples (herceptin
+<b>+7.2</b>, immuno <b>+3.2</b>); the losses are broad (human <b>&minus;6.2</b>, gluc <b>&minus;4.3</b>).</p>
+<p class="note warn"><b>Resolved: the conflicting chart compares two data splits.</b> It reports these means
+as 0.5745 &rarr; 0.5772 (v1.3.0 <em>ahead</em>). Its v1.3 side is our run; its v1.2.2 side came from a
+workbook tab named <code>instanovo_1_2_2_with_new_splits</code>. The residual proves it: <b>&minus;0.0186</b>
+on the nine re-splittable <code>ninespecies</code> sets against <b>&minus;0.0022</b> on the eight test-only
+biological ones. Both arms here share one split.</p>
 """)
 
 slide(f"""
@@ -945,40 +969,36 @@ offer. That is a real result, and not a leaderboard improvement.</p>
 """)
 
 slide(f"""
-<h2>Measuring on the accepted subset had understated every feature</h2>
+<h2>The accepted subset understated every feature</h2>
 {src("ProteoBench nine-species balanced", "InstaNovo v1.2.2", "beam-10", "Winnow calibrate-estimate")}
 {feature_dumbbell()}
 <p class="note">The first pass measured on the 504,692 FDR-accepted rows &mdash; a subset selected by
-thresholding the very score under test. On full coverage every feature improves and the Koina fragment-match
-features improve most: <code>xcorr</code> moves from apparently <em>inverse</em> (0.477) to informative (0.596).
-An earlier claim that the Koina features "barely discriminate" was an artefact of that range restriction and is
-withdrawn. One earlier finding survives: the calibrator's combined output (0.877) still does not beat its single
-best input, <code>median_margin</code> (0.889).</p>
+thresholding the very score under test. On full coverage every feature improves, the Koina ones most:
+<code>xcorr</code> moves from apparently <em>inverse</em> (0.477) to informative (0.596), so the earlier claim
+that they "barely discriminate" is withdrawn. What survives: the calibrator's combined output (0.877) still
+loses to its single best input, <code>median_margin</code> (0.889).</p>
 """)
 
 slide(f"""
-<h2>Two scorers: different by construction, agreeing in practice</h2>
+<h2>Two scorers, one answer</h2>
 {src("Internal held-out, 17 sets", "greedy decoding", "v1.2.2", "same predictions, scored twice")}
 <div class="two-col">
 <div>
 {scorer_table()}
-<p class="note">Same parameter names, same defaults-shaped API, different physics. On a ~100 Da residue
-ProteoBench allows 0.002 Da against InstaNovo's 0.1 Da; on a 1000 Da prefix, 0.05 Da against 0.5 Da. Identical
-in v1.2.2 and v1.3.0 &mdash; this is a scorer difference, not a version one.</p>
+<p class="note">Same parameter names, different physics. On a ~100 Da residue ProteoBench allows 0.002 Da
+against InstaNovo's 0.1 Da; on a 1000 Da prefix, 0.05 Da against 0.5 Da. Identical in v1.2.2 and v1.3.0
+&mdash; a scorer difference, not a version one.</p>
 </div>
 <div>
 {scorer_agreement()}
 </div>
 </div>
-<p class="note">Despite tolerances differing by 10&ndash;50&times;, the per-dataset means differ by under
-<b>0.003</b>, and ProteoBench is marginally <em>looser</em> in 14 of 17 &mdash; the opposite of what tolerance
-alone predicts, because its bidirectional prefix/suffix alignment offsets the tighter threshold. <b>Both
-scorers agree the v1.3 checkpoint is behind</b>: &minus;0.82 pp by InstaNovo's, &minus;1.02 pp by
-ProteoBench's.</p>
-<p class="note warn"><b>So the conflicting chart is not a metric problem.</b> Its v1.3 figure (0.5772) matches
-our v1.3 run under InstaNovo <code>Metrics</code> exactly; its v1.2.2 figure (0.5745) matches neither of ours
-(0.5854, 0.5883). The two sides are different experiments &mdash; the v1.2.2 baseline is another run. An
-earlier version of this deck blamed the scorer; that was wrong.</p>
+<p class="note">Despite tolerances differing by 10&ndash;50&times;, the <b>means across the 17 sets differ by
+0.0029</b> (0.5854 against 0.5883), and ProteoBench is the <em>looser</em> one in 11, tied in 3 and tighter in
+3 &mdash; its bidirectional prefix/suffix alignment offsets the tighter threshold. Individual sets can diverge
+more: herceptin by <b>+0.0174</b>, and ricebean, human, bacillus and yeast by 0.004&ndash;0.008.
+<b>Both scorers agree v1.3 is behind</b> (&minus;0.82 pp and &minus;1.02 pp), so the conflicting chart is
+<b>not a metric problem</b>: its v1.3 figure matches our run exactly, its v1.2.2 figure matches neither.</p>
 """)
 
 slide("""
@@ -987,31 +1007,26 @@ slide("""
 <div>
 <h3>Settled</h3>
 <ul>
-<li>Beam search is the intervention that pays. <b>Knapsack is not, and this is now measured on both
-benchmarks</b>: +0.0005 on ProteoBench, +0.0010 internally for 7.2&times; the GPU.</li>
-<li>v1.3.0's gain over v1.2.2 on ProteoBench is <b>confined to exact matching</b> (+0.034 to +0.046 across
-three modes, pep/mass within &plusmn;0.004) &mdash; modification and I/L calling, not backbone sequencing.</li>
-<li>Gated refinement is marginal on ProteoBench and negative on our data.</li>
-<li>The confidence is over-confident by ~4.4 points at the operating threshold, worst on the hardest
-organisms, and recalibration does not improve ranking.</li>
-<li>Cost transfers between checkpoints; accuracy conclusions do not.</li>
+<li>Beam search pays; <b>knapsack does not, on both benchmarks</b> &mdash; +0.0005 on ProteoBench, +0.0010
+internally for 7.2&times; the GPU. Beam-10 beats knapsack beam-5 outright.</li>
+<li>v1.3.0's ProteoBench gain is <b>confined to exact matching</b> (+0.034 to +0.046 across three modes,
+pep/mass within &plusmn;0.004) &mdash; modification and I/L calling, not backbone.</li>
+<li>Gated refinement's <b>sign depends on the checkpoint</b>: positive for v1.2.2, negative for v1.3 at
+every width.</li>
+<li>Confidence is over-confident by ~4.4 points at the operating threshold, worst on the hardest organisms;
+recalibration does not fix the ranking. Cost transfers between checkpoints; accuracy does not.</li>
 </ul>
 </div>
 <div>
 <h3>Open</h3>
 <ul>
-<li><b>Four v1.3.0 modes on ProteoBench</b> still running: diffusion-only and both knapsack modes, plus
-beam-10+refinement. The two refined ones are queued for re-scoring, since they run on an image predating
-the N-terminal length fix.</li>
-<li><b>Which split is canonical.</b> Our matrix runs on <code>ninespecies_v1</code>; a re-split exists and
-an earlier v1.2.2 evaluation used it. If the re-split is the intended test set, both arms are on superseded
-data and would need re-running. Where it physically lives is unconfirmed &mdash; <code>ninespecies_v2</code>
-is referenced by one script and used by no run.</li>
-<li><b>Five internal runs scored but not yet in the pooled table</b> &mdash; both arms' beam-10 and
-beam-5+refinement, and v1.3 diffusion-only. Three v1.2.2 internal modes remain unlaunched.</li>
-<li>Why <b>diffusion-only is 2.3&times; slower</b> on the v1.3 checkpoint.</li>
-<li>A calibrator trained on a species-held-out split, to separate domain shift from intrinsic
-miscalibration &mdash; and to cover the five modes that keep no beams.</li>
+<li><b>Why v1.3 diffusion-only collapses</b> &mdash; 0.1767 on ProteoBench, 0.1164 internally, at
+2.3&ndash;5.5&times; the runtime, while the refined modes on that checkpoint are fine. The largest open item.</li>
+<li><b>Which split is canonical.</b> Our matrix runs on <code>ninespecies_v1</code>; a re-split exists and an
+earlier v1.2.2 evaluation used it. If it is the intended test set, both arms are on superseded data.</li>
+<li><b>Three v1.3.0 ProteoBench modes still running</b> (beam-10+ref, both knapsack) plus three internal
+refined modes; the knapsack pair has days to go.</li>
+<li>A calibrator on a species-held-out split, to separate domain shift from miscalibration.</li>
 </ul>
 </div>
 </div>
@@ -1060,6 +1075,11 @@ table.data tr.best td{font-weight:700;}
 table.data td.best-cell{font-weight:700;}
 table.data td.na,table.matrix td.na{color:var(--text-muted);}
 table.data.compact{width:auto;} table.data.compact th{text-align:left;}
+/* Long tables pay for their row padding twice over: a 13-row table at the default .42em
+   vertical padding is 591px, which forces the whole slide to render at two thirds scale and
+   makes every cell smaller than the padding saved. Dense trades whitespace for type size. */
+table.data.dense th,table.data.dense td{padding:.2em .45em;}
+table.data.dense{font-size:.425em;}
 table.data.paired th{text-align:center;} table.data.paired th.sub{font-weight:500; font-size:.92em;}
 table.data.paired td.mode{text-align:left;}
 table.matrix{font-size:.44em; text-align:center;}
@@ -1085,7 +1105,8 @@ table.matrix{margin-bottom:.2em;}
 .legend .key i{width:.85em; height:.85em; border-radius:3px; display:inline-block;}
 .legend .key b{font-size:1.2em; line-height:1;}
 
-svg.chart{display:block; max-width:100%; height:auto;}
+svg.chart{display:block; width:auto; height:auto; max-width:100%; max-height:455px; margin:0 auto;}
+.stack2 svg.chart{max-height:250px;}
 svg.chart .tick{font-size:12px; fill:var(--text-secondary);}
 svg.chart .tick.strong{fill:var(--text-primary); font-weight:600;}
 svg.chart .tick .src{fill:var(--text-muted); font-weight:400;}
@@ -1124,6 +1145,29 @@ HTML = f"""<!doctype html>
 <script>
   Reveal.initialize({{hash:true, slideNumber:'c/t', width:1280, height:800, margin:0.06,
                      minScale:0.2, maxScale:1.6, transition:'fade'}});
+
+  // Shrink-to-fit. Reveal scales for the AUTHORED 1280x800 only, so a slide whose content is
+  // taller than that silently spills past the top and bottom of the window -- which reads as text
+  // running off the edge. Rather than scale the section ourselves (which fights reveal's
+  // centring), tell reveal the slide is as tall as its content actually is: its scale is
+  // min(availW/width, availH/height), so raising `height` for one slide makes reveal fit it.
+  //
+  // scrollHeight is in unscaled coordinates, so it is the natural height regardless of the
+  // transform currently applied. The guard on `applied` stops configure() from re-entering
+  // through the layout it triggers.
+  const BASE_H = 800;
+  let applied = null;
+  function fitSlide() {{
+    const s = Reveal.getCurrentSlide();
+    if (!s) return;
+    const want = Math.max(BASE_H, Math.ceil(s.scrollHeight));
+    if (want === applied) return;
+    applied = want;
+    Reveal.configure({{height: want}});
+  }}
+  Reveal.on('ready', fitSlide);
+  Reveal.on('slidechanged', fitSlide);
+  window.addEventListener('resize', () => {{ applied = null; fitSlide(); }});
 </script>
 </body>
 </html>
