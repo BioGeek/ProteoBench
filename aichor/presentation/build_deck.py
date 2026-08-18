@@ -42,10 +42,19 @@ PB_V122 = [
 # metrics_summary.csv. greedy 9685299a, beam10 b934d33f, greedy_refined re-scored as 50a09a12
 # after the N-terminal length crash. diffusion_only and the two knapsack modes are still running;
 # beam10_refined and knapsack_beam10_refined are queued for re-scoring.
+# mode -> (pep/mass, pep/exact, aa/mass, GPU hours, note)
 PB_V130 = {
-    "greedy": (0.695058, 0.447481, 0.834528),
-    "beam10": (0.7295, 0.4677, 0.8651),
-    "greedy_refined": (0.6927, 0.4461, 0.8343),
+    "greedy": (0.695058, 0.447481, 0.834528, 1.87, ""),
+    "beam10": (0.7295, 0.4677, 0.8651, 10.33, ""),
+    "greedy_refined": (0.6927, 0.4461, 0.8343, 2.98, ""),
+    # Excluded from the cost chart and flagged in the table: this collapses on BOTH benchmarks
+    # (0.1767 here, 0.1164 internally) while every other v1.3 mode lands within a couple of points
+    # of its v1.2.2 counterpart. Coverage is 1.000, so predictions were made and parsed -- the model
+    # produced wrong answers at scale, and pep AUC of 0.31 is not something a working model gives.
+    # diffusion-only is the one mode that runs InstaNovo+ standalone with no transformer sequence to
+    # start from, and the three refined modes share its checkpoint and are fine. Treated as a
+    # harness fault under investigation, not a model result.
+    "diffusion_only": (0.1767, 0.0894, 0.4373, 15.52, "suspected harness fault"),
 }
 PB_V130_GREEDY = {"pep_mass": 0.695058, "pep_exact": 0.447481, "aa_mass": 0.834528, "hours": 1.87}
 
@@ -236,16 +245,16 @@ def svg(width: int, height: int, body: str, label: str) -> str:
 
 
 def cost_scatter() -> str:
-    """pep/mass against GPU hours for the seven v1.2.2 modes.
+    """pep/mass against GPU hours, both checkpoints.
 
-    A scatter, not bars: the question is the trade between two continuous quantities, and the
-    shape of the answer -- a knee, then a flat run -- is the finding. One series, so no legend;
-    every point is directly labelled instead.
+    A scatter, not bars: the question is a trade between two continuous quantities, and the shape of
+    the answer -- a knee, then a flat run -- is the finding. Two series now, so a legend is present
+    and each point keeps its direct label. v1.3.0's diffusion-only is omitted: it is a suspected
+    harness fault (0.18 pep/mass) and plotting it would compress the y-axis to nothing and imply a
+    result that is not one.
     """
     W, H = 900, 430
-    L, R, T, B = 70, 300, 24, 52
-    xs = [m[6] for m in PB_V122]
-    ys = [m[1] for m in PB_V122]
+    L, R, T, B = 70, 290, 24, 52
     x0, x1 = 0, 38
     y0, y1 = 0.685, 0.740
 
@@ -255,6 +264,8 @@ def cost_scatter() -> str:
     def py(v):
         return H - B - (v - y0) / (y1 - y0) * (H - B - T)
 
+    v130_key = {"greedy (1 beam)": "greedy", "beam search (10)": "beam10",
+                "greedy + refinement": "greedy_refined"}
     parts = []
     for gv in [0.69, 0.70, 0.71, 0.72, 0.73, 0.74]:
         parts.append(f'<line x1="{L}" y1="{py(gv):.1f}" x2="{W-R}" y2="{py(gv):.1f}" stroke="{C_GRID}" stroke-width="1"/>')
@@ -263,31 +274,42 @@ def cost_scatter() -> str:
         parts.append(f'<text x="{px(gh):.1f}" y="{H-B+22}" text-anchor="middle" class="tick">{gh}</text>')
     parts.append(f'<line x1="{L}" y1="{H-B}" x2="{W-R}" y2="{H-B}" stroke="{C_GRID}" stroke-width="1"/>')
 
-    # Pareto guide: cheapest mode reaching each accuracy level.
-    frontier = sorted([(m[6], m[1], m[0]) for m in PB_V122])
+    # cheapest v1.2.2 mode reaching each accuracy level
     best = -1
     pts = []
-    for hx, hy, _ in frontier:
+    for hx, hy in sorted((m[6], m[1]) for m in PB_V122):
         if hy > best:
             best = hy
             pts.append((hx, hy))
-    path = " ".join(f"{px(a):.1f},{py(b):.1f}" for a, b in pts)
-    parts.append(f'<polyline points="{path}" fill="none" stroke="{C_V122}" stroke-width="2" stroke-dasharray="5 4" opacity="0.5"/>')
+    parts.append('<polyline points="' + " ".join(f"{px(a):.1f},{py(b):.1f}" for a, b in pts)
+                 + f'" fill="none" stroke="{C_V122}" stroke-width="2" stroke-dasharray="5 4" opacity="0.45"/>')
 
     for name, pm, _pe, _il, _aa, _auc, hours in PB_V122:
         cx, cy = px(hours), py(pm)
         emph = "knapsack" in name
         parts.append(
             f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="7" fill="{C_V122}" stroke="var(--surface-1)" stroke-width="2">'
-            f"<title>{esc(name)}: {pm:.4f} pep/mass, {hours:g} GPU h</title></circle>"
+            f"<title>v1.2.2 {esc(name)}: {pm:.4f} pep/mass, {hours:g} GPU h</title></circle>"
         )
-        anchor = "start"
-        dx = 14
-        cls = "pt-label emph" if emph else "pt-label"
-        parts.append(f'<text x="{cx+dx:.1f}" y="{cy+4:.1f}" text-anchor="{anchor}" class="{cls}">{esc(name)}</text>')
+        parts.append(f'<text x="{cx+14:.1f}" y="{cy+4:.1f}" class="{"pt-label emph" if emph else "pt-label"}">{esc(name)}</text>')
+        key = v130_key.get(name)
+        if key:
+            v = PB_V130[key]
+            if v[4]:
+                continue
+            dx, dy = px(v[3]), py(v[0])
+            parts.append(f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{dx:.1f}" y2="{dy:.1f}" stroke="{C_MUTED}" stroke-width="1.5" opacity="0.6"/>')
+            parts.append(
+                f'<circle cx="{dx:.1f}" cy="{dy:.1f}" r="7" fill="{C_V130}" stroke="var(--surface-1)" stroke-width="2">'
+                f"<title>v1.3.0 {esc(name)}: {v[0]:.4f} pep/mass, {v[3]:g} GPU h</title></circle>"
+            )
     parts.append(f'<text x="{(L+W-R)/2:.0f}" y="{H-6}" text-anchor="middle" class="axis-title">GPU hours</text>')
     parts.append(f'<text x="16" y="{T+8}" class="axis-title">pep/mass precision</text>')
-    return svg(W, H, "".join(parts), "Peptide mass-match precision against GPU hours for seven decoding modes")
+    legend = (f'<span class="key"><i style="background:{C_V122}"></i>v1.2.2</span>'
+              f'<span class="key"><i style="background:{C_V130}"></i>v1.3.0</span>'
+              f'<span class="key muted">connected pairs are the same mode</span>')
+    return f'<div class="legend">{legend}</div>' + svg(W, H, "".join(parts),
+        "Peptide mass-match precision against GPU hours, both checkpoints")
 
 
 def grouped_bars(rows, series_labels, colors, title_label, fmt="{:.4f}", vmin=None, vmax=None, height=360):
@@ -559,32 +581,48 @@ def status_matrix() -> str:
 
 
 def pb_table() -> str:
-    """The v1.2.2 sweep, with the best value in each metric column bolded.
+    """The v1.2.2 sweep with v1.3.0 alongside, paired per metric.
 
-    Per column, not per row: no single mode wins everything. Knapsack beam-10 + refinement takes
-    pep/mass, exact+IL and AUC; plain beam-10 + refinement takes pep/exact by 0.0001; and
-    diffusion-only takes aa/mass outright. Bolding a whole row would assert a clean sweep that
-    the numbers do not support.
-
-    GPU time is deliberately left unbolded -- it is a cost, so "highest" would mark the worst
-    mode, and marking the lowest would put a winner's emphasis on the least accurate one.
+    Two-level header rather than ten flat columns: the reader compares within a metric, so the two
+    checkpoints belong adjacent. Best value is bolded per column, i.e. per metric AND per version --
+    no single mode wins everything, and bolding a row would assert a sweep the numbers deny.
+    GPU time carries no bold: it is a cost, so "highest" would mark the worst mode.
     """
-    cols = ["pep/mass", "pep/exact", "exact+IL", "aa/mass", "pep AUC"]
-    values = [[m[i + 1] for m in PB_V122] for i in range(5)]
-    best_at = [max(range(len(PB_V122)), key=lambda r: values[c][r]) for c in range(5)]
+    metrics = [("pep/mass", 1, 0), ("pep/exact", 2, 1), ("aa/mass", 4, 2)]
+    v130_key = {"greedy (1 beam)": "greedy", "beam search (10)": "beam10",
+                "greedy + refinement": "greedy_refined", "InstaNovo+ diffusion only": "diffusion_only"}
 
-    head = "<tr><th>Mode</th>" + "".join(f"<th>{esc(c)}</th>" for c in cols) + "<th>GPU</th></tr>"
+    # best per column, computed separately for each version
+    best = {}
+    for label, i122, i130 in metrics:
+        col122 = [m[i122] for m in PB_V122]
+        best[(label, "122")] = max(range(len(PB_V122)), key=lambda r: col122[r])
+        avail = [(r, PB_V130[v130_key[m[0]]][i130]) for r, m in enumerate(PB_V122)
+                 if m[0] in v130_key and not PB_V130[v130_key[m[0]]][4]]
+        best[(label, "130")] = max(avail, key=lambda x: x[1])[0] if avail else None
+
+    head = (
+        "<tr><th rowspan='2'>Mode</th>"
+        + "".join(f"<th colspan='2'>{esc(l)}</th>" for l, _, _ in metrics)
+        + "<th rowspan='2'>GPU</th></tr>"
+        + "<tr>" + "".join("<th class='sub'>v1.2.2</th><th class='sub'>v1.3.0</th>" for _ in metrics) + "</tr>"
+    )
     rows = []
-    for ri, (name, *metrics, hours) in enumerate(PB_V122):
+    for ri, row in enumerate(PB_V122):
+        name, hours = row[0], row[6]
+        key = v130_key.get(name)
         cells = []
-        for ci in range(5):
-            v = metrics[ci]
-            cls = " class='best-cell'" if best_at[ci] == ri else ""
-            cells.append(f"<td{cls}>{v:.4f}</td>")
-        rows.append(
-            f"<tr><td class='mode'>{esc(name)}</td>{''.join(cells)}<td class='num cost'>{hours:g} h</td></tr>"
-        )
-    return f"<table class='data'>{head}{''.join(rows)}</table>"
+        for label, i122, i130 in metrics:
+            b = " class='best-cell'" if best[(label, "122")] == ri else ""
+            cells.append(f"<td{b}>{row[i122]:.4f}</td>")
+            if key is None:
+                cells.append("<td class='na' title='v1.3.0 run still in flight'>&middot;</td>")
+            else:
+                v, note = PB_V130[key][i130], PB_V130[key][4]
+                cls = " class='na'" if note else (" class='best-cell'" if best[(label, "130")] == ri else "")
+                cells.append(f"<td{cls}>{v:.4f}{'*' if note else ''}</td>")
+        rows.append(f"<tr><td class='mode'>{esc(name)}</td>{''.join(cells)}<td class='num cost'>{hours:g} h</td></tr>")
+    return f"<table class='data paired'>{head}{''.join(rows)}</table>"
 
 
 def internal_table() -> str:
@@ -627,9 +665,12 @@ share one harness and one dataset list, so only the weights vary.</p>
 
 slide(f"""
 <h2>Decoding choice moves accuracy more than anything else</h2>
-{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2")}
+{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2 vs v1.3.0")}
 {pb_table()}
-<p class="note">Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
+<p class="note">v1.3.0 is shown where it has landed; <b>&middot;</b> marks a mode still in flight, and
+<b>*</b> marks v1.3.0 diffusion-only, whose 0.1767 is a <b>suspected harness fault</b> &mdash; it collapses on
+both benchmarks (0.1164 internally) while every other v1.3 mode lands within a couple of points of its
+v1.2.2 counterpart, at coverage 1.000. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
 each column: no mode sweeps them. Knapsack beam-10 + refinement takes pep/mass, exact+IL and AUC; plain
 beam-10 + refinement takes pep/exact by <b>0.0001</b>; diffusion-only takes aa/mass outright. GPU time is a
 cost, so it carries no winner.</p>
@@ -640,10 +681,13 @@ test on the pep/exact pair is the single <b>non-significant</b> comparison of 42
 
 slide(f"""
 <h2>...but the last increments cost the most</h2>
-{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2")}
+{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2 vs v1.3.0")}
 {cost_scatter()}
 <p class="note">Beam search over greedy buys <b>+0.0332</b> for ~7&times; the GPU. The knapsack constraint then
-buys <b>+0.0005</b> for another 2.5&times;. The dashed line is the cheapest mode reaching each accuracy level.</p>
+buys <b>+0.0005</b> for another 2.5&times;. The dashed line is the cheapest v1.2.2 mode reaching each accuracy
+level. <b>v1.3.0 sits almost on top of v1.2.2 on this axis</b> &mdash; the same accuracy at a similar cost
+(greedy 1.9 h against 1.5 h, beam-10 10.3 h against 10.2 h) &mdash; because its gain is in <em>exact</em>
+matching, which this axis does not show. Its diffusion-only point is omitted as a suspected fault.</p>
 """)
 
 slide("""
@@ -982,6 +1026,8 @@ table.data tr.best td{font-weight:700;}
 table.data td.best-cell{font-weight:700;}
 table.data td.na,table.matrix td.na{color:var(--text-muted);}
 table.data.compact{width:auto;} table.data.compact th{text-align:left;}
+table.data.paired th{text-align:center;} table.data.paired th.sub{font-weight:500; font-size:.92em;}
+table.data.paired td.mode{text-align:left;}
 table.matrix{font-size:.44em; text-align:center;}
 table.matrix th{padding:.4em .3em; color:var(--text-secondary); font-weight:600; font-size:.92em;}
 table.matrix th.rowhead{text-align:left; white-space:nowrap; color:var(--text-primary);}
