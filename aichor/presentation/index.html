@@ -187,11 +187,13 @@ compared across rows: InstaNovo+ emits no per-token scores, so the peptide score
 <b>+7.2</b>, immuno <b>+3.2</b> &mdash; and both are antibody or immunopeptide samples. The losses are broad,
 with human <b>&minus;6.2</b> and gluc <b>&minus;4.3</b>. Spectrum-weighted pooling gives a wider gap still
 (0.6031 &rarr; 0.5852), because the large <code>ninespecies</code> sets are where v1.2.2 leads.</p>
-<p class="note warn"><b>Resolved &mdash; and it was not the metric.</b> An existing chart reports these
-greedy means as 0.5745 &rarr; 0.5772 (+0.27 pp, v1.3.0 <em>ahead</em>). Scoring the same predictions with
-InstaNovo's own <code>Metrics</code> gives 0.5854 &rarr; 0.5772: the v1.3 side matches that chart exactly, the
-v1.2.2 side does not. Its v1.2.2 baseline is a <b>different run</b>, not a different measurement &mdash; see
-the scorer-comparison slide.</p>
+<p class="note warn"><b>Resolved: the conflicting chart compares two different data splits.</b> It reports
+these greedy means as 0.5745 &rarr; 0.5772 (v1.3.0 <em>ahead</em> by 0.27 pp). Its v1.3 side is exactly our
+run; its v1.2.2 side was copied from a workbook tab named <code>instanovo_1_2_2_with_new_splits</code> &mdash;
+a v1.2.2 evaluation on the <b>re-split</b> data. The residual proves it: <b>&minus;0.0186</b> mean on the nine
+<code>ninespecies</code> sets, which are split 80/10/10, against <b>&minus;0.0022</b> on the eight biological
+sets, which are test-only and cannot be re-split. Both arms here share one <code>pipeline.yaml</code> and
+therefore one split, so this comparison is internally consistent.</p>
 </section>
 <section>
 <h2>Cost is checkpoint-independent; knapsack is not</h2>
@@ -336,6 +338,10 @@ organisms, and recalibration does not improve ranking.</li>
 <li><b>Four v1.3.0 modes on ProteoBench</b> still running: diffusion-only and both knapsack modes, plus
 beam-10+refinement. The two refined ones are queued for re-scoring, since they run on an image predating
 the N-terminal length fix.</li>
+<li><b>Which split is canonical.</b> Our matrix runs on <code>ninespecies_v1</code>; a re-split exists and
+an earlier v1.2.2 evaluation used it. If the re-split is the intended test set, both arms are on superseded
+data and would need re-running. Where it physically lives is unconfirmed &mdash; <code>ninespecies_v2</code>
+is referenced by one script and used by no run.</li>
 <li><b>Five internal runs scored but not yet in the pooled table</b> &mdash; both arms' beam-10 and
 beam-5+refinement, and v1.3 diffusion-only. Three v1.2.2 internal modes remain unlaunched.</li>
 <li>Why <b>diffusion-only is 2.3&times; slower</b> on the v1.3 checkpoint.</li>

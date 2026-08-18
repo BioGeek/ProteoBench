@@ -75,11 +75,24 @@ marginally *looser* in 14 of 17 — the opposite of what the tolerance predicts,
 bidirectional alignment offsets the tighter threshold. Both put the v1.3 checkpoint behind
 (−0.82 pp and −1.02 pp).
 
-That resolves the discrepancy this section used to describe as open. The conflicting chart's v1.3
-figure (0.5772) matches our run under InstaNovo `Metrics` **exactly**; its v1.2.2 figure (0.5745)
-matches neither of ours (0.5854 InstaNovo, 0.5883 ProteoBench). **Its v1.2.2 baseline is a
-different run, not a different metric** — identifying which run remains open. An earlier version
-of this README blamed the metric; that was wrong.
+That resolves the discrepancy this section used to describe as open, and the cause is now identified.
+The chart was built in another session from a Google Sheets workbook: its v1.3 side is exactly our
+runs `4cc23918` and `3f3b282e`, and its v1.2.2 side was copied from a tab named
+**`instanovo_1_2_2_with_new_splits`** — a v1.2.2 evaluation on the **re-split** data.
+
+The residual confirms it: −0.0186 mean on the nine `ninespecies` sets, which are split 80/10/10,
+against −0.0022 on the eight biological sets, which are test-only and cannot be re-split
+(`wound_fluids` matches to 0.0001). A re-split cannot move a set that was never split.
+
+**Our matrix runs on `ninespecies_v1`**, via the `pipeline.yaml` both arms share, so the comparison
+is internally consistent — one split, weights the only variable. That it is the *old* split is an
+inference, not a direct observation: the workbook baseline is the one labelled "with new splits" and
+our numbers differ from it exactly on the split-affected datasets. Where the new split physically
+lives is unconfirmed; `ninespecies_v2` appears in one script and in no run or config.
+
+Two earlier explanations, both wrong and both recorded so they are not re-derived: the metric
+(scorers agree to 0.003) and a differing checkpoint (the residual is split-shaped, not
+checkpoint-shaped).
 
 Also never compare `pep_recall_at_0.050_fdr` against either headline: it is a third quantity
 (clambacteria 0.153 against 0.472 unfiltered).
