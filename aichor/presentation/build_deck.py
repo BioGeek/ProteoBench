@@ -106,6 +106,34 @@ PER_DATASET_GREEDY = [
     ("human", 0.5593, 0.4976),
 ]
 
+# ── per-dataset refinement delta on the internal held-out sets ──────────────────────────
+# pep/mass precision of (base + refinement) minus base, per dataset, from _scored/metrics.csv
+# (level=peptide, evaluation=mass, baseline ambiguity). Four base/refined pairs exist:
+# v1.2.2 beam-5, and v1.3 at greedy, beam-5 and knapsack beam-5. The v1.2.2 greedy and beam-10
+# refined runs are still in flight, so beam-5 is the only width where both checkpoints can be
+# compared like for like -- which is the comparison this chart is built around.
+#
+# dataset, v1.2.2 beam-5, v1.3 greedy, v1.3 beam-5, v1.3 knapsack beam-5
+REFINE_DELTA = [
+    ("woundfluids", -0.0325, -0.0016, -0.0059, -0.0046),
+    ("helaqc", -0.0181, -0.0042, -0.0047, -0.0047),
+    ("human", -0.0154, -0.0031, -0.0052, -0.0054),
+    ("herceptin", -0.0137, -0.0050, -0.0100, -0.0037),
+    ("gluc", -0.0076, -0.0025, -0.0028, -0.0028),
+    ("mouse", -0.0020, -0.0017, -0.0043, -0.0040),
+    ("tplantibodies", 0.0054, -0.0022, -0.0023, -0.0025),
+    ("sbrodae", 0.0057, -0.0010, -0.0019, -0.0022),
+    ("mmazei", 0.0066, -0.0019, -0.0037, -0.0039),
+    ("yeast", 0.0067, -0.0069, -0.0089, -0.0095),
+    ("honeybee", 0.0073, -0.0035, -0.0060, -0.0063),
+    ("snakevenoms", 0.0073, -0.0004, -0.0015, -0.0021),
+    ("tomato", 0.0082, -0.0018, -0.0038, -0.0040),
+    ("bacillus", 0.0101, -0.0027, -0.0052, -0.0052),
+    ("clambacteria", 0.0106, -0.0029, -0.0037, -0.0038),
+    ("ricebean", 0.0110, -0.0046, -0.0080, -0.0085),
+    ("immuno", 0.0123, -0.0015, -0.0031, -0.0046),
+]
+
 # ── the same predictions scored twice: InstaNovo Metrics vs ProteoBench ─────────────────
 # dataset, instanovo Metrics (0.5/0.1 Da), proteobench (50/20 ppm), for v1.2.2 greedy.
 # From each run's own instanovo_results.csv and _scored/metrics.csv respectively.
@@ -242,10 +270,26 @@ def src(*parts: str) -> str:
 
 # ══ chart helpers ══════════════════════════════════════════════════════════════════════
 
+SVG_REFERENCE_WIDTH = 900
+SVG_BASE_FONT_PX = 12
+
+
 def svg(width: int, height: int, body: str, label: str) -> str:
+    """Wrap chart geometry in an SVG, keeping label size consistent across authored widths.
+
+    A chart is authored in viewBox units and rendered to whatever width the slide gives it, so a
+    fixed `font-size: 12px` in CSS means different apparent sizes depending on how much the viewBox
+    was scaled. Charts here are authored 900 wide and render slightly larger than that; a 1400-wide
+    one renders smaller, which shrank its labels to about 9px. Scaling the font size by
+    `width / SVG_REFERENCE_WIDTH` cancels that out, so text is the same physical size on every chart.
+    """
+    # Absolute viewBox pixels, not em: an inline `font-size: 1.3em` would resolve against the
+    # inherited slide font size rather than the chart's own 12px, which blew every label up to ~39px.
+    scale = width / SVG_REFERENCE_WIDTH
+    style = f' style="font-size:{SVG_BASE_FONT_PX * scale:.2f}px"' if abs(scale - 1) > 0.01 else ""
     return (
         f'<svg viewBox="0 0 {width} {height}" width="100%" role="img" aria-label="{esc(label)}" '
-        f'class="chart">{body}</svg>'
+        f'class="chart"{style}>{body}</svg>'
     )
 
 
@@ -533,6 +577,86 @@ def per_dataset_dumbbell() -> str:
 # two well-separated divergences are labelled; every point keeps its full <title> on hover, and the
 # note carries the cluster's size.
 SCORER_LABEL_SKIP = {"bacillus", "yeast", "ricebean"}
+
+
+def refinement_delta_chart() -> str:
+    """Per-dataset refinement delta at beam-5, one marker per checkpoint, in two panels.
+
+    Both arms get the SAME encoding at the SAME beam width: one dot each, being
+    (base + refinement) minus base in pep/mass precision, joined by a hairline so the pair is
+    unambiguous. An earlier version drew v1.3 as a span across its three refined widths and v1.2.2 as
+    a single dot -- because v1.3 has three refined pairs scored and v1.2.2 has one -- which reads as
+    uncertainty on one arm and none on the other. It never meant that. The other two v1.3 widths agree
+    closely and are stated in the note instead.
+
+    Beam-5 is the only width where both checkpoints have a scored refined arm, so it is the only
+    like-for-like row available; v1.2.2's greedy and beam-10 refined runs are still in flight.
+
+    Two panels of nine and eight rows rather than one of seventeen: a single column needs 17 rows of
+    at least 26 units to keep the labels legible at this chart's font scale, which makes it taller
+    than the slide can give it. Split, it fits at full size. Both panels share one x scale.
+
+    Internal sets only -- ProteoBench is scored as one pooled benchmark here and has no per-dataset
+    equivalent to plot. Its numbers are in the table above.
+    """
+    W = 1440
+    row_h = 26
+    T, B = 46, 54
+    label_w, plot_w, gap = 150, 545, 50
+    left = sorted(REFINE_DELTA, key=lambda r: r[1])
+    panels = [left[:9], left[9:]]
+    H = T + row_h * max(len(c) for c in panels) + B
+    lo, hi = -0.035, 0.016
+
+    parts = []
+    for pi, rows in enumerate(panels):
+        ox = pi * (label_w + plot_w + gap)
+        p0 = ox + label_w
+
+        def px(v, p0=p0):
+            return p0 + (v - lo) / (hi - lo) * plot_w
+
+        for gv in (-0.03, -0.02, -0.01, 0.0, 0.01):
+            x = px(gv)
+            zero = gv == 0.0
+            parts.append(
+                f'<line x1="{x:.1f}" y1="{T - 6}" x2="{x:.1f}" y2="{H - B}" '
+                f'stroke="{"var(--text-secondary)" if zero else C_GRID}" stroke-width="{2 if zero else 1}"/>'
+            )
+            parts.append(
+                f'<text x="{x:.1f}" y="{H - B + 24}" text-anchor="middle" class="tick">{gv:+.2f}</text>'
+            )
+        parts.append(f'<text x="{px(0.0) - 10:.1f}" y="{T - 16}" text-anchor="end" class="tick">hurts &#8592;</text>')
+        parts.append(f'<text x="{px(0.0) + 10:.1f}" y="{T - 16}" class="tick">&#8594; helps</text>')
+
+        for i, (name, v122, _g3, b3, _k3) in enumerate(rows):
+            y = T + i * row_h + row_h / 2
+            parts.append(
+                f'<text x="{p0 - 14}" y="{y + 6:.1f}" text-anchor="end" class="tick strong">{esc(name)}</text>'
+            )
+            parts.append(
+                f'<line x1="{px(min(v122, b3)):.1f}" y1="{y:.1f}" x2="{px(max(v122, b3)):.1f}" y2="{y:.1f}" '
+                f'stroke="{C_GRID}" stroke-width="2"/>'
+            )
+            for val, colour, ver in ((v122, C_V122, "v1.2.2"), (b3, C_V130, "v1.3")):
+                parts.append(
+                    f'<circle cx="{px(val):.1f}" cy="{y:.1f}" r="6" fill="{colour}" stroke="var(--surface-1)" '
+                    f'stroke-width="2"><title>{ver} {esc(name)}, beam-5: {val:+.4f}</title></circle>'
+                )
+    parts.append(
+        f'<text x="{W / 2:.0f}" y="{H - 6}" text-anchor="middle" class="axis-title">'
+        f"change in pep/mass precision from adding refinement, at beam-5</text>"
+    )
+    legend = (
+        f'<span class="key"><i style="background:{C_V122}"></i>v1.2.2 beam-5</span>'
+        f'<span class="key"><i style="background:{C_V130}"></i>v1.3 beam-5</span>'
+        f'<span class="key muted">internal held-out sets, sorted by the v1.2.2 change; '
+        f"ProteoBench is pooled, see table above</span>"
+    )
+    return f'<div class="legend">{legend}</div>' + svg(
+        W, H, "".join(parts),
+        "Per-dataset change in peptide/mass precision from refinement at beam-5, both checkpoints",
+    )
 
 
 def scorer_agreement() -> str:
@@ -844,15 +968,24 @@ against plain beam-10 + refinement at peptide/exact level:</p>
 """)
 
 slide(f"""
-<h2>Refinement: a small win here, a uniform loss there</h2>
-{src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2")}
-{grouped_bars(
-    [("greedy", [0.6946, 0.6964]), ("beam-10", [0.7278, 0.7317]), ("knapsack-10", [0.7283, 0.7321])],
-    ["base", "+ InstaNovo+ refinement"], [C_V122, C_V130],
-    "ProteoBench: refinement adds a small amount at every beam width", vmin=0.685, vmax=0.740, height=330)}
-<p class="note">On ProteoBench, gated refinement adds <b>+0.0018 to +0.0039</b> pep/mass. On the internal
-held-out sets the same operation on the v1.3 checkpoint is <b>negative in 17 of 17 datasets</b>, and
-34 of 34 dataset-arm pairs across both checkpoints. That conclusion does not transfer &mdash; it reverses.</p>
+<h2>Refinement helps or hurts depending on the checkpoint</h2>
+{src("ProteoBench nine-species balanced, v1.2.2", "and internal held-out, 17 sets, both checkpoints",
+      "pep/mass")}
+<table class="data compact">
+<tr><th>Change in pep/mass from adding refinement</th><th>v1.2.2 checkpoint</th><th>v1.3 checkpoint</th></tr>
+<tr><td>ProteoBench nine-species balanced</td>
+    <td class="best-cell">win: <b>+0.0018 to +0.0039</b><br><span class="sub">greedy, beam-10, knapsack-10</span></td>
+    <td>loss: <b>&minus;0.0024</b><br><span class="sub">greedy; other widths in flight</span></td></tr>
+<tr><td>Internal held-out, 17 sets</td>
+    <td class="best-cell">win: <b>+0.0049</b> pooled<br><span class="sub">beam-5; 11 of 17 datasets</span></td>
+    <td>loss: <b>&minus;0.0029 to &minus;0.0051</b><br><span class="sub">greedy, beam-5, knapsack beam-5; 0 of 17</span></td></tr>
+</table>
+{refinement_delta_chart()}
+<p class="note">Win on both datasets for v1.2.2, loss on both for v1.3 &mdash; so the split is by
+checkpoint, not by dataset. The two also fail <em>differently</em>: v1.2.2 wins on average but with a wide
+spread and six real losses, worst <b>&minus;0.0325</b> on wound fluids, while v1.3 loses in <b>51 of 51</b>
+dataset-pair comparisons &mdash; all 17 datasets at each of three widths &mdash; tightly, within 0.01. Mixed
+and large against uniform and small.</p>
 """)
 
 slide(f"""
@@ -1042,9 +1175,10 @@ slide(f"""
 {feature_dumbbell()}
 <p class="note">The first pass measured on the 504,692 FDR-accepted rows &mdash; a subset selected by
 thresholding the very score under test. On full coverage every feature improves, the Koina ones most:
-<code>xcorr</code> moves from apparently <em>inverse</em> (0.477) to informative (0.596), so the earlier claim
-that they "barely discriminate" is withdrawn. What survives: the calibrator's combined output (0.877) still
-loses to its single best input, <code>median_margin</code> (0.889).</p>
+<code>xcorr</code> moves from apparently <em>inverse</em> (0.477) to informative (0.596). Range restriction
+had understated every feature, so any read on the accepted subset alone is biased low. What holds either way:
+the calibrator's combined output (0.877) still loses to its single best input,
+<code>median_margin</code> (0.889).</p>
 """)
 
 slide(f"""
@@ -1176,14 +1310,21 @@ table.matrix{margin-bottom:.2em;}
 .legend .key i{width:.85em; height:.85em; border-radius:3px; display:inline-block;}
 .legend .key b{font-size:1.2em; line-height:1;}
 
-svg.chart{display:block; width:auto; height:auto; max-width:100%; max-height:455px; margin:0 auto;}
+/* width:100% not auto. The markup sets width="100%", which is not an intrinsic length, so with
+   `width:auto` the intrinsic width is undefined and max-height ends up driving the used width --
+   which silently mis-sized a wide 1400x432 chart. Pinning the width makes height:auto derive from
+   the viewBox ratio, and max-height then letterboxes (preserveAspectRatio defaults to meet) rather
+   than clipping. The cap exists because an authored 900x470 chart renders 564px tall on a 1280
+   slide, which pushes a slide with a heading and a note off the frame. */
+svg.chart{display:block; width:100%; height:auto; max-width:100%; max-height:455px; margin:0 auto;}
 .stack2 svg.chart{max-height:250px;}
-svg.chart .tick{font-size:12px; fill:var(--text-secondary);}
+svg.chart{font-size:12px;}
+svg.chart .tick{font-size:1em; fill:var(--text-secondary);}
 svg.chart .tick.strong{fill:var(--text-primary); font-weight:600;}
 svg.chart .tick .src{fill:var(--text-muted); font-weight:400;}
-svg.chart .axis-title{font-size:12px; fill:var(--text-secondary); font-weight:600;}
-svg.chart .bar-label{font-size:12px; fill:var(--text-primary); font-weight:600;}
-svg.chart .pt-label{font-size:12.5px; fill:var(--text-primary);}
+svg.chart .axis-title{font-size:1em; fill:var(--text-secondary); font-weight:600;}
+svg.chart .bar-label{font-size:1em; fill:var(--text-primary); font-weight:600;}
+svg.chart .pt-label{font-size:1.04em; fill:var(--text-primary);}
 svg.chart .pt-label.emph{font-weight:700;}
 """
 
