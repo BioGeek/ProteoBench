@@ -1,50 +1,48 @@
-# Winnow calibration diagnostics for one InstaNovo inference mode, with Koina in-pod.
-#
-# `aichor experiments submit local` reads the manifest at the repository root, so copy
-# this over ./manifest.yaml (or submit by commit-sha with --manifest-path) to run it.
-#
-# Start with beam10: it is the only mode besides knapsack_beam10 whose predictions carry
-# the ten beam columns winnow's instanovo loader expects, so it exercises the full
-# feature set -- fragment match, iRT, beam, chimeric, token score, mass error. The modes
-# without beams need a column rename and lose the beam and chimeric features.
 # yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
 kind: AIchorManifest
 apiVersion: 0.2.3
 builder:
-  image: proteobench-winnow-koina
-  # Both paths are resolved relative to `context`, so the dockerfile is named
-  # bare here; a repo-root-relative path would be appended to the context.
-  dockerfile: Dockerfile
-  context: ./aichor/winnow_calibration
+  image: proteobench-instanovo-v1-3-0
+  dockerfile: ./aichor/instanovo_v1_3_0/Dockerfile
+  context: .
 spec:
   operator: jobset
-  image: proteobench-winnow-koina
-  # AIchor runs spec.command as a shell command, which replaces the image
-  # ENTRYPOINT, so Koina's start-and-wait wrapper is invoked explicitly here.
-  # Reranking: score every beam as a candidate and keep the best per spectrum.
-  # This can change the predicted peptide, so precision and recall can move.
-  # One full scoring pass per beam, so runtime is roughly ten times a single run.
-  command: >-
-    /usr/local/bin/entrypoint.koina.sh
-    /usr/local/bin/run_rerank.sh
-    beam10
-    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/e3543482-6b63-4467-87ac-868cddd7ae04/instanovo_v1_2_2_metrics/runs/beam10/raw_predictions.csv
-    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/101107e7-222f-48b7-a504-c0f041ddb069/instanovo_v1_2_2_proteobench/data/nine_species_balanced_De_Novo.mgf
-    s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/winnow_rerank
+  image: proteobench-instanovo-v1-3-0
+
+  # Re-score predictions that already exist, with no GPU and no repeat of inference.
+  #
+  # greedy_refined (04c26560) finished inference and then died in the datapoint step on
+  # ProteoBench's N-terminal length bug: two predictions carried carbamylation and ammonia loss
+  # stacked on one terminus, where the length helper counted two scored positions and the
+  # tokenizer counted one, so collapse_aa_scores raised "All arrays must be of the same length".
+  # Fixed on this branch (cherry-pick of the upstream fix), so the existing raw_predictions.csv
+  # can simply be re-scored.
+  #
+  # --metrics-from takes MODE=PATH and is repeatable, but only beam10_refined is listed here:
+  #
+  #   greedy_refined            already re-scored in 50a09a12; re-doing it wastes an hour of CPU
+  #   beam10_refined            8bc22f0e failed exactly as predicted at 12:23 on 2026-08-18, after
+  #                             20 h 17 m of inference, with "All arrays must be of the same
+  #                             length". raw_predictions.csv (3.6 GiB) survived and there is no
+  #                             datapoint.json, confirming only the datapoint step died. This is
+  #                             the run being recovered.
+  #   knapsack_beam10_refined   00238fba is still running (ETA ~04:00 on 2026-08-19) so its
+  #                             predictions do not exist yet. It shares this pre-fix image and will
+  #                             very likely fail the same way; re-score it in a second pass then.
+  #
+  # Add the other two back by uncommenting when their turn comes.
+  command: >
+    cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
+    python run_sweep.py
+    --metrics-from beam10_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/8bc22f0e-bb75-4952-9089-8e6fe69c4c6d/instanovo_v1_3_0_beam10_refined/runs/beam10_refined/samples/nine_species_balanced_De_Novo/raw_predictions.csv
+    --work-dir /workspace/proteobench_v130_rescore
+    --output-prefix instanovo_v1_3_0_rescored
+
   types:
     worker:
       count: 1
       completions: 1
       parallelisms: 1
       resources:
-        # Triton needs a GPU for the Prosit models, and a larger shared-memory segment
-        # than the default; a MIG slice is enough once MODEL_PATTERN limits the models.
-        # 779,879 spectra with ten beams each: the previous 8x8 request died with
-        # ArrowMemoryError on a 4.5GB allocation while building the feature table.
         cpus: 8
-        ramRatio: 24
-        accelerators:
-          gpu:
-            count: 1
-            type: gpu
-            product: NVIDIA-H100-80GB-HBM3-MIG-3g.40gb
+        ramRatio: 12

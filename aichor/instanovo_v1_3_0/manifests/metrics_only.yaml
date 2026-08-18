@@ -18,17 +18,23 @@ spec:
   # Fixed on this branch (cherry-pick of the upstream fix), so the existing raw_predictions.csv
   # can simply be re-scored.
   #
-  # --metrics-from takes MODE=PATH and is repeatable. All three refined modes are listed:
-  # greedy_refined is already re-scored (50a09a12); the other two ran on the pre-fix image
-  # and will have died at the same datapoint step, so their predictions are re-scored here
-  # rather than re-running six hours of inference. A mode whose path does not exist yet
-  # fails on its own and the others still complete.
+  # --metrics-from takes MODE=PATH and is repeatable, but only beam10_refined is listed here:
+  #
+  #   greedy_refined            already re-scored in 50a09a12; re-doing it wastes an hour of CPU
+  #   beam10_refined            8bc22f0e failed exactly as predicted at 12:23 on 2026-08-18, after
+  #                             20 h 17 m of inference, with "All arrays must be of the same
+  #                             length". raw_predictions.csv (3.6 GiB) survived and there is no
+  #                             datapoint.json, confirming only the datapoint step died. This is
+  #                             the run being recovered.
+  #   knapsack_beam10_refined   00238fba is still running (ETA ~04:00 on 2026-08-19) so its
+  #                             predictions do not exist yet. It shares this pre-fix image and will
+  #                             very likely fail the same way; re-score it in a second pass then.
+  #
+  # Add the other two back by uncommenting when their turn comes.
   command: >
     cd /workspace/ProteoBench/aichor/instanovo_v1_2_2 &&
     python run_sweep.py
-    --metrics-from greedy_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/04c26560-e328-41cf-9632-bd0df0d7b979/instanovo_v1_3_0_greedy_refined/runs/greedy_refined/samples/nine_species_balanced_De_Novo/raw_predictions.csv
     --metrics-from beam10_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/8bc22f0e-bb75-4952-9089-8e6fe69c4c6d/instanovo_v1_3_0_beam10_refined/runs/beam10_refined/samples/nine_species_balanced_De_Novo/raw_predictions.csv
-    --metrics-from knapsack_beam10_refined=s3://dtu-denovo-s-2e6da747d6d34f62-outputs/output/00238fba-def9-45ca-a8a8-52c3bed8b9d1/instanovo_v1_3_0_knapsack_beam10_refined/runs/knapsack_beam10_refined/samples/nine_species_balanced_De_Novo/raw_predictions.csv
     --work-dir /workspace/proteobench_v130_rescore
     --output-prefix instanovo_v1_3_0_rescored
 
