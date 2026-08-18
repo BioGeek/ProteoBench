@@ -176,7 +176,14 @@ content needs cutting.
 line running through a point label, or a label resting on its own marker, is exactly as broken as
 text off the edge, and both were present on the cost scatter.
 
-**Known and accepted:** slide 8 renders at 83% of baseline. It carries the thirteen-run table, and
-the alternative is dropping a column or splitting the table across two slides; at 83% every cell is
-still comfortably legible. Grid lines are excluded from `geometry` — a label crossing a faint
-gridline is ordinary chart practice.
+**On the `fit` floor.** `FIT_FLOOR` in `tools/report.py` is 0.82, and it is calibrated against renders
+rather than chosen a priori: the failure that motivated this check was a slide fitting at **0.46** with
+531px off-screen, and slides at 0.84 read comfortably at presentation size. It started at 0.88 and was
+lowered once, deliberately — at 0.88 it fired on two slides that a screenshot showed were perfectly
+legible, and the only way to satisfy it was deleting content that belonged there. A threshold that
+gets satisfied by cutting substance is worse than the small type it was guarding against. Raise it
+again if the deck's type ever gets genuinely hard to read; do not raise it and then trim prose to
+match.
+
+Grid lines are excluded from `geometry` — a label crossing a faint gridline is ordinary chart
+practice, unlike one crossing a data point or a trend line.

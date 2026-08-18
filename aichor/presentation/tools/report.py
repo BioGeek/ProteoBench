@@ -19,6 +19,15 @@ def payload():
     return json.loads(html.unescape(m.group(1)))
 
 
+# Fraction of the deck's own baseline scale below which a slide is called too small. Calibrated by
+# eyeballing renders, not chosen a priori: the failure this check exists to catch was a slide fitting
+# at 0.46 with 531px spilling off-screen, and slides at 0.84 read comfortably at presentation size.
+# Set at 0.82 so real regressions still trip it while ordinary dense slides do not, because a
+# threshold that fires on a legible slide gets satisfied by deleting content -- which is worse than
+# the small type it was trying to prevent.
+FIT_FLOOR = 0.82
+
+
 def fit(data):
     """Frame spill, and how far each slide's shrink-to-fit scale falls below the deck baseline."""
     base = max(r["scale"] for r in data)
@@ -28,7 +37,7 @@ def fit(data):
         rel = r["scale"] / base
         if spill > 1:
             out.append(f'  SPILL slide {r["i"]} by {spill}px: {r["title"]}')
-        elif rel < 0.88:
+        elif rel < FIT_FLOOR:
             out.append(f'  small slide {r["i"]} at {rel * 100:.0f}% of baseline: {r["title"]}')
     return out or ["  ok: every slide inside the frame at full type size"]
 

@@ -54,7 +54,7 @@ PB_V130 = {
     # diffusion-only is the one mode that runs InstaNovo+ standalone with no transformer sequence to
     # start from, and the three refined modes share its checkpoint and are fine. Treated as a
     # harness fault under investigation, not a model result.
-    "diffusion_only": (0.1767, 0.0894, 0.4373, 15.52, "suspected harness fault"),
+    "diffusion_only": (0.1767, 0.0894, 0.4373, 15.52, "unsupported mode for this checkpoint"),
 }
 PB_V130_GREEDY = {"pep_mass": 0.695058, "pep_exact": 0.447481, "aa_mass": 0.834528, "hours": 1.87}
 
@@ -68,7 +68,7 @@ INTERNAL_V130 = [
     ("beam-10", 0.6545, 0.7931, 0.8857, "31 h 46 m", ""),
     ("knapsack beam-5", 0.6458, 0.7813, 0.8851, "121 h", ""),
     ("knapsack beam-5 + refinement", 0.6408, 0.7771, 0.8357, "8 h 57 m", ""),
-    ("diffusion only", 0.1164, 0.3698, 0.3149, "19 h 33 m", "suspected harness fault"),
+    ("diffusion only", 0.1164, 0.3698, 0.3149, "19 h 33 m", "unsupported mode for this checkpoint"),
 ]
 INTERNAL_V122 = [
     ("greedy", 0.6031, 0.7483, 0.8785, "5 h 51 m", ""),
@@ -792,9 +792,8 @@ slide(f"""
 {src("ProteoBench nine-species balanced", "779,879 spectra", "InstaNovo v1.2.2 vs v1.3.0")}
 {pb_table()}
 <p class="note">v1.3.0 is shown where it has landed; <b>&middot;</b> marks a mode still in flight, and
-<b>*</b> marks v1.3.0 diffusion-only, whose 0.1767 is a <b>suspected harness fault</b> &mdash; it collapses on
-both benchmarks (0.1164 internally) while every other v1.3 mode lands within a couple of points of its
-v1.2.2 counterpart, at coverage 1.000. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
+<b>*</b> marks v1.3.0 diffusion-only, now <b>diagnosed</b> (slide 8): an
+<b>unsupported mode</b> for that checkpoint, which also explains its 15.52 h against 2.8 h. Refined modes are <b>confidence-gated at 0.9</b> as shipped &mdash; not refined unconditionally. Bold marks the best value in
 each column &mdash; per metric <em>and</em> per checkpoint &mdash; and no mode sweeps them: on v1.2.2,
 knapsack beam-10 + refinement takes pep/mass, plain beam-10 + refinement takes pep/exact by <b>0.0001</b>,
 and diffusion-only takes aa/mass outright. GPU hours carry no bold: they are a cost, so "highest" would mark
@@ -884,18 +883,18 @@ slide(f"""
 {src("Internal held-out, 17 sets", "1,702,287 spectra pooled", "ProteoBench scorer",
       "aa AUC not comparable across refined rows")}
 {internal_table(dense=True)}
-<p class="note"><b>v1.2.2 leads at every width</b> &mdash; greedy <b>+0.0179</b>, beam-5 <b>+0.0078</b>,
-beam-10 <b>+0.0062</b> &mdash; the opposite verdict to ProteoBench's, on the same scorer. Beam width still
-pays; the knapsack constraint still does not, and <b>beam-10 beats knapsack beam-5 outright</b> at a quarter
-of the GPU. Bold is per metric <em>and</em> per checkpoint; <b>&middot;</b> is a run still in flight and
-<b>&mdash;</b> one deliberately never launched (knapsack cost 121 h on v1.3, not worth repeating on older
-weights).</p>
-<p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> It <em>helps</em> v1.2.2 at beam-5
-(<b>0.6575</b> vs <b>0.6526</b>) and hurts v1.3 at every width, in <b>0 of 17</b> datasets &mdash; same gate,
-same code, same data. A property of the checkpoint refined, not of refinement.</p>
-<p class="note warn"><b>*v1.3 diffusion-only is a suspected fault</b>, not a result: 0.1164 at coverage 0.9999,
-and 19 h 33 m against 8 h 24 m. It collapses on ProteoBench too, while the refined modes sharing its
-checkpoint are fine.</p>
+<p class="note"><b>v1.2.2 leads at every width</b> (+0.0179, +0.0078, +0.0062) &mdash; the opposite verdict
+to ProteoBench's, on the same scorer. Beam width pays; the knapsack constraint does not, and <b>beam-10 beats
+knapsack beam-5 outright</b> at a quarter of the GPU. <b>&middot;</b> is a run in flight, <b>&mdash;</b> one
+never launched.</p>
+<p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> It <em>helps</em> v1.2.2 at
+beam-5 and hurts v1.3 at every width, in <b>0 of 17</b> datasets &mdash; same gate, same code, same data. A
+property of the checkpoint being refined, not of refinement.</p>
+<p class="note warn"><b>*v1.3 diffusion-only is diagnosed, and is not a result.</b> Its checkpoint has
+<b>200</b> diffusion timesteps against v1.2.2's <b>20</b>, so standalone decoding runs 200 passes from random
+noise while refinement runs 16 from a transformer seed &mdash; hence the refined modes are fine. Shortening
+the chain makes it <em>worse</em> (0.024 vs 0.140), so the cause is the <b>missing seed</b>, not the depth:
+an unsupported mode for this checkpoint.</p>
 """)
 
 slide(f"""
@@ -1079,21 +1078,22 @@ internally for 7.2&times; the GPU. Beam-10 beats knapsack beam-5 outright.</li>
 <li>v1.3.0's ProteoBench gain is <b>confined to exact matching</b> (+0.034 to +0.046 across three modes,
 pep/mass within &plusmn;0.004) &mdash; modification and I/L calling, not backbone.</li>
 <li>Gated refinement's <b>sign depends on the checkpoint</b>: positive for v1.2.2, negative for v1.3 at
-every width.</li>
-<li>Confidence is over-confident by ~4.4 points at the operating threshold, worst on the hardest organisms;
-recalibration does not fix the ranking. Cost transfers between checkpoints; accuracy does not.</li>
+every width. And v1.3 diffusion-only is an <b>unsupported mode</b>, not bad data &mdash; it needs a
+transformer seed that standalone decoding cannot give it.</li>
+<li>Confidence runs ~4.4 points over-confident at the operating threshold, worst on the hardest
+organisms, and recalibration does not fix the ranking. Cost transfers between checkpoints; accuracy does not.</li>
 </ul>
 </div>
 <div>
 <h3>Open</h3>
 <ul>
-<li><b>Why v1.3 diffusion-only collapses</b> &mdash; 0.1767 on ProteoBench, 0.1164 internally, at
-2.3&ndash;5.5&times; the runtime, while the refined modes on that checkpoint are fine. The largest open item.</li>
+<li><b>Whether a 200-step InstaNovo+ can generate from noise at all.</b> v1.2.2's 20-step model can and
+v1.3's cannot, on the same training objective &mdash; a training question now, not an inference one.</li>
 <li><b>Which split is canonical.</b> Our matrix runs on <code>ninespecies_v1</code>; a re-split exists and an
 earlier v1.2.2 evaluation used it. If it is the intended test set, both arms are on superseded data.</li>
 <li><b>Three v1.3.0 ProteoBench modes still running</b> (beam-10+ref, both knapsack) plus three internal
-refined modes; the knapsack pair has days to go.</li>
-<li>A calibrator on a species-held-out split, to separate domain shift from miscalibration.</li>
+refined modes.</li>
+<li>A calibrator on a species-held-out split, separating domain shift from miscalibration.</li>
 </ul>
 </div>
 </div>
