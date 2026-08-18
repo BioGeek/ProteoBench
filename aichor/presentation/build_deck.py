@@ -61,16 +61,21 @@ PB_V130_GREEDY = {"pep_mass": 0.695058, "pep_exact": 0.447481, "aa_mass": 0.8345
 # ── internal held-out sets, pooled over all 17 (scored with ProteoBench's own scorer) ───
 # mode, pep/mass, aa/mass, pep AUC, wall clock
 INTERNAL_V130 = [
-    ("greedy", 0.5852, 0.7289, 0.8668, "5 h 40 m"),
-    ("beam-5", 0.6448, 0.7824, 0.8825, "16 h 50 m"),
-    ("knapsack beam-5", 0.6458, 0.7813, 0.8851, "121 h"),
-    ("greedy + refinement", 0.5823, 0.7249, 0.8056, "8 h 42 m"),
-    ("knapsack beam-5 + refinement", 0.6408, 0.7771, 0.8357, "8 h 57 m"),
+    ("greedy", 0.5852, 0.7289, 0.8668, "5 h 40 m", ""),
+    ("greedy + refinement", 0.5823, 0.7249, 0.8056, "8 h 42 m", ""),
+    ("beam-5", 0.6448, 0.7824, 0.8825, "16 h 50 m", ""),
+    ("beam-5 + refinement", 0.6399, 0.7777, 0.8344, "8 h 58 m", ""),
+    ("beam-10", 0.6545, 0.7931, 0.8857, "31 h 46 m", ""),
+    ("knapsack beam-5", 0.6458, 0.7813, 0.8851, "121 h", ""),
+    ("knapsack beam-5 + refinement", 0.6408, 0.7771, 0.8357, "8 h 57 m", ""),
+    ("diffusion only", 0.1164, 0.3698, 0.3149, "19 h 33 m", "suspected harness fault"),
 ]
 INTERNAL_V122 = [
-    ("greedy", 0.6031, 0.7483, 0.8785, "5 h 51 m"),
-    ("beam-5", 0.6526, 0.7889, 0.8895, "16 h 32 m"),
-    ("diffusion only", 0.5885, 0.7600, 0.8615, "8 h 24 m"),
+    ("greedy", 0.6031, 0.7483, 0.8785, "5 h 51 m", ""),
+    ("beam-5", 0.6526, 0.7889, 0.8895, "16 h 32 m", ""),
+    ("beam-5 + refinement", 0.6575, 0.7978, 0.8934, "8 h 33 m", ""),
+    ("beam-10", 0.6607, 0.7968, 0.8923, "31 h 35 m", ""),
+    ("diffusion only", 0.5885, 0.7600, 0.8615, "8 h 24 m", ""),
 ]
 
 # ── per-dataset, per-checkpoint peptide/mass recall on the internal sets ────────────────
@@ -198,12 +203,12 @@ STATUS = [
     ("Internal held-out (17 sets)", MODES_INT, [
         ("v1.3", {
             "greedy": "done", "greedy+ref": "done", "knapsack-5": "done", "knapsack-5+ref": "done",
-            "beam-5": "done", "diffusion": "scoring", "beam-5+ref": "scoring", "beam-10": "scoring",
-            "beam-10+ref": "planned",
+            "beam-5": "done", "beam-5+ref": "done", "beam-10": "done", "diffusion": "done",
+            "beam-10+ref": "running",
         }),
         ("v1.2.2", {
-            "greedy": "done", "diffusion": "done", "beam-5": "done", "beam-10": "scoring",
-            "beam-5+ref": "scoring", "greedy+ref": "planned", "beam-10+ref": "planned",
+            "greedy": "done", "diffusion": "done", "beam-5": "done", "beam-5+ref": "done",
+            "beam-10": "done", "greedy+ref": "running", "beam-10+ref": "running",
             "knapsack-5": "skipped", "knapsack-5+ref": "skipped",
         }),
     ]),
@@ -626,14 +631,31 @@ def pb_table() -> str:
 
 
 def internal_table() -> str:
-    head = "<tr><th>Mode</th><th>checkpoint</th><th>pep/mass</th><th>aa/mass</th><th>pep AUC</th><th>wall clock</th></tr>"
+    """One row per scored internal run, grouped by checkpoint.
+
+    All thirteen runs in one table rather than a per-arm pair, because the finding that matters is a
+    cross-arm one: v1.2.2 leads at every width it was run at, and refinement's sign flips between the
+    two checkpoints. Bold marks the best value within each checkpoint's block, so the two blocks can
+    be read separately without implying a cross-block winner. Flagged rows carry an asterisk instead
+    of bold-eligible numbers -- v1.3's diffusion-only is a suspected fault, not a result, and letting
+    it compete for "worst" would be as misleading as letting it compete for "best".
+    """
+    head = ("<tr><th>Mode</th><th>checkpoint</th><th>pep/mass</th><th>aa/mass</th>"
+            "<th>pep AUC</th><th>wall clock</th></tr>")
     rows = []
-    for label, data, ckpt, colour in (("v1.3", INTERNAL_V130, "v1.3", C_V130), ("v1.2.2", INTERNAL_V122, "v1.2.2", C_V122)):
-        for name, pm, aa, auc, wall in data:
+    for data, ckpt, colour in ((INTERNAL_V122, "v1.2.2", C_V122), (INTERNAL_V130, "v1.3", C_V130)):
+        clean = [r for r in data if not r[5]]
+        best = {i: max(r[i] for r in clean) for i in (1, 2, 3)}
+        for name, pm, aa, auc, wall, flag in data:
+            cells = []
+            for i, v in ((1, pm), (2, aa), (3, auc)):
+                txt = f"{v:.4f}" + ("*" if flag else "")
+                cells.append(f"<td>{'<b>' + txt + '</b>' if not flag and v == best[i] else txt}</td>")
             rows.append(
                 f"<tr><td class='mode'>{esc(name)}</td>"
                 f"<td><span class='dot' style='background:{colour}'></span>{esc(ckpt)}</td>"
-                f"<td>{pm:.4f}</td><td>{aa:.4f}</td><td>{auc:.4f}</td><td class='num'>{esc(wall)}</td></tr>"
+                + "".join(cells)
+                + f"<td class='num'>{esc(wall)}</td></tr>"
             )
     return f"<table class='data'>{head}{''.join(rows)}</table>"
 
@@ -659,7 +681,8 @@ slide(f"""
 <p class="lede">Two checkpoints &times; two benchmarks &times; the decoding modes that matter.</p>
 {status_matrix()}
 <p class="note">The v1.2.2 arm on ProteoBench is complete and is the reference everything else is read
-against; the v1.3.0 arm on the same data is one mode in, with six running. Internally both checkpoints
+against; the v1.3.0 arm on the same data is three modes in, with three long knapsack and refined runs
+still going. Internally <b>thirteen of the sixteen runs are scored</b> and only three refined modes remain. Internally both checkpoints
 share one harness and one dataset list, so only the weights vary.</p>
 """)
 
@@ -755,17 +778,27 @@ way.</p>
 """)
 
 slide(f"""
-<h2>On our own data, the older checkpoint is ahead at greedy</h2>
-{src("Internal held-out, 17 sets", "pooled over all spectra", "ProteoBench scorer")}
+<h2>On our own data, the older checkpoint is ahead at every width</h2>
+{src("Internal held-out, 17 sets", "1,702,287 spectra pooled", "ProteoBench scorer")}
 {internal_table()}
-<p class="note">Pooled over 17 held-out sets, scored through ProteoBench's own scorer so the columns mean
-the same thing as the previous slides. <b>v1.2.2 leads at both beam widths</b> &mdash; greedy by
-<b>+0.0178</b>, beam-5 by <b>+0.0078</b> &mdash; the opposite verdict to ProteoBench's, on the same scorer.
-The two are less independent than that phrasing suggests (next slide), but the disagreement survives it. Beam search is worth <b>+0.0596</b> over greedy on v1.3, and remains the intervention that pays.</p>
-<p class="note callout"><b>Knapsack is settled.</b> Plain beam-5 scores <b>0.6448</b> against knapsack
-beam-5's <b>0.6458</b> &mdash; <b>+0.0010 for 7.2&times; the GPU</b>, 16 h 50 m against 121 h. ProteoBench
-measured +0.0005 for the same comparison. Two benchmarks, same answer: the knapsack constraint is not worth
-running.</p>
+<p class="note">All thirteen scored runs, pooled over 17 held-out sets, through ProteoBench's own scorer so
+the columns mean the same thing as the earlier slides. <b>v1.2.2 leads at every beam width it was run at</b>
+&mdash; greedy <b>+0.0179</b>, beam-5 <b>+0.0078</b>, beam-10 <b>+0.0062</b> &mdash; the opposite verdict to
+ProteoBench's, on the same scorer. The two benchmarks are less independent than that phrasing suggests (next
+slide), but the disagreement survives it. Beam search remains the intervention that pays: <b>+0.0693</b> from
+greedy to beam-10 on v1.3, <b>+0.0576</b> on v1.2.2.</p>
+<p class="note callout"><b>Refinement's sign flips with the checkpoint.</b> On v1.2.2 it <em>helps</em>
+&mdash; beam-5 + refinement <b>0.6575</b> against beam-5's <b>0.6526</b>, and it is that arm's best pep/mass
+after beam-10. On v1.3 it hurts at every width: greedy &minus;0.0029, beam-5 &minus;0.0049, knapsack beam-5
+&minus;0.0050, and in <b>0 of 17</b> datasets does it help. Same InstaNovo+ gate (0.9), same code, same data
+&mdash; so this is a property of the transformer checkpoint being refined, not of refinement. The practical
+reading: refinement should be <b>off</b> for v1.3, not merely retuned.</p>
+<p class="note warn"><b>*v1.3 diffusion-only is a suspected harness fault, not a result.</b> 0.1164 pep/mass
+against v1.2.2's 0.5885 on identical data, pep AUC 0.3149, at coverage 0.9999 &mdash; so predictions were
+made and parsed, and were simply wrong at scale. It also took <b>19 h 33 m</b> against v1.2.2's 8 h 24 m on
+the same hardware. The same collapse appears on ProteoBench (0.1767 against 0.7142), and the three v1.3
+refined modes share this checkpoint and are fine, which points at the standalone InstaNovo+ path rather than
+the weights. Under investigation; excluded from every comparison here.</p>
 <p class="note warn">The <code>aa AUC</code> for any refined or diffusion-only row is inflated and must not be
 compared across rows: InstaNovo+ emits no per-token scores, so the peptide score is broadcast across residues.</p>
 """)
@@ -780,7 +813,7 @@ slide(f"""
 <tr><td class="mode">internal biological</td><td class="num">174,160</td><td>0.7310</td><td>0.7005</td>
     <td class="best-cell">&minus;3.05 pp</td><td class="best-cell">&minus;3.02 pp</td></tr>
 <tr><td class="mode">ProteoBench balanced v2</td><td class="num">779,879</td><td>0.6946</td><td>0.6951</td>
-    <td>**+0.05 pp**</td><td>&mdash;</td></tr>
+    <td class="best-cell"><b>+0.05 pp</b></td><td>&mdash;</td></tr>
 </table>
 <div class="two-col">
 <div>
@@ -828,6 +861,7 @@ slide(f"""
 <tr><th>mode</th><th>v1.3</th><th>v1.2.2</th></tr>
 <tr><td>greedy</td><td>5 h 40 m</td><td>5 h 51 m</td></tr>
 <tr><td>beam-5</td><td>16 h 50 m</td><td>16 h 32 m</td></tr>
+<tr><td>beam-10</td><td>31 h 46 m</td><td>31 h 35 m</td></tr>
 <tr><td>refinement pass</td><td>8 h 42 m</td><td class="na">&mdash;</td></tr>
 <tr><td>diffusion only</td><td>19 h 33 m</td><td>8 h 24 m</td></tr>
 <tr class="best"><td>knapsack beam-5</td><td>121 h</td><td class="na">not run</td></tr>
