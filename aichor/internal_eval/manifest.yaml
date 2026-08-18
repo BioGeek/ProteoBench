@@ -18,14 +18,14 @@ spec:
   # Runs whose prefix does not exist are skipped with a warning, so this same command can be
   # re-issued unchanged as the remaining runs land.
   #
-  # All eight completed runs, scored into ONE prefix. Earlier jobs split them: 65b8e552 wrote
+  # All thirteen completed runs, scored into ONE prefix. Earlier jobs split them: 65b8e552 wrote
   # four runs to `_scored`, then the two knapsack runs went to `_scored_knapsack` after they
   # crashed on `KeyError: 'U'` (ProteoBench's AA_MASSES covers only the 20 standard residues
   # and get_token_mass indexed it without a fallback, while the v1.3 133-residue vocabulary
   # includes selenocysteine and mass-constrained knapsack search emits it -- fixed in 520861a1
   # and 6625897d). That split is a trap: anyone reading `_scored/metrics.csv` alone silently
   # got four runs of six, and the next default-path job would have overwritten it. Re-scoring
-  # the six already done costs about 15 minutes each and buys a single consolidated table.
+  # the eight already done costs about 15 minutes each and buys a single consolidated table.
   #
   # metrics.csv is written once after the loop, so a mid-job failure leaves the existing
   # `_scored/metrics.csv` untouched rather than replacing it with a partial result.
@@ -36,10 +36,15 @@ spec:
     instanovo_v1_3_133res_test_greedy
     instanovo_v1_3_133res_test_greedy_refined
     instanovo_v1_3_133res_test_beam5
+    instanovo_v1_3_133res_test_beam5_refined
+    instanovo_v1_3_133res_test_beam10
     instanovo_v1_3_133res_test
     instanovo_v1_3_133res_test_knapsack_beam5_refined
+    instanovo_v1_3_133res_test_diffusion_only
     instanovo_v1_2_2_test_greedy
     instanovo_v1_2_2_test_beam5
+    instanovo_v1_2_2_test_beam5_refined
+    instanovo_v1_2_2_test_beam10
     instanovo_v1_2_2_test_diffusion_only
 
   types:
