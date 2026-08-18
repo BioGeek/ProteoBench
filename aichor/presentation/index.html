@@ -624,6 +624,49 @@ on the nine re-splittable <code>ninespecies</code> sets against <b>&minus;0.0022
 biological ones. Both arms here share one split.</p>
 </section>
 <section>
+<h2>The exact-match loss is isoleucine/leucine, not modifications</h2>
+<p class="table-src">Internal held-out &middot; beam-10 &middot; v1.3 against v1.2.2 &middot; exact-match precision</p>
+<div class="legend"><span class="key"><i style="background:var(--series-2)"></i>genuine sequencing loss (mass level)</span><span class="key"><i style="background:var(--series-2);opacity:.35"></i>I/L confusion only</span></div><svg viewBox="0 0 900 250" width="100%" role="img" aria-label="v1.3&#x27;s exact-match deficit split into sequencing loss and I/L confusion" class="chart"><line x1="132.0" y1="30" x2="132.0" y2="198" stroke="var(--grid)" stroke-width="1"/><text x="132.0" y="220" text-anchor="middle" class="tick">0</text><line x1="300.0" y1="30" x2="300.0" y2="198" stroke="var(--grid)" stroke-width="1"/><text x="300.0" y="220" text-anchor="middle" class="tick">3</text><line x1="468.0" y1="30" x2="468.0" y2="198" stroke="var(--grid)" stroke-width="1"/><text x="468.0" y="220" text-anchor="middle" class="tick">6</text><line x1="636.0" y1="30" x2="636.0" y2="198" stroke="var(--grid)" stroke-width="1"/><text x="636.0" y="220" text-anchor="middle" class="tick">9</text><line x1="804.0" y1="30" x2="804.0" y2="198" stroke="var(--grid)" stroke-width="1"/><text x="804.0" y="220" text-anchor="middle" class="tick">12</text><text x="120" y="64.3" text-anchor="end" class="tick strong">gluc</text><rect x="132" y="39.0" width="236.3" height="40.7" fill="var(--series-2)" opacity="0.9"><title>gluc: 4.22pp lost at mass level -- genuine sequencing</title></rect><rect x="368.3" y="39.0" width="449.7" height="40.7" fill="var(--series-2)" opacity="0.35"><title>gluc: a further 8.03pp lost only to I/L confusion</title></rect><text x="828.0" y="64.3" class="bar-label">12.2pp</text><text x="120" y="119.0" text-anchor="end" class="tick strong">helaqc</text><rect x="132" y="93.7" width="262.6" height="40.7" fill="var(--series-2)" opacity="0.9"><title>helaqc: 4.69pp lost at mass level -- genuine sequencing</title></rect><rect x="394.6" y="93.7" width="427.8" height="40.7" fill="var(--series-2)" opacity="0.35"><title>helaqc: a further 7.64pp lost only to I/L confusion</title></rect><text x="832.5" y="119.0" class="bar-label">12.3pp</text><text x="120" y="173.7" text-anchor="end" class="tick strong">woundfluids</text><rect x="132" y="148.3" width="333.8" height="40.7" fill="var(--series-2)" opacity="0.9"><title>woundfluids: 5.96pp lost at mass level -- genuine sequencing</title></rect><rect x="465.8" y="148.3" width="261.5" height="40.7" fill="var(--series-2)" opacity="0.35"><title>woundfluids: a further 4.67pp lost only to I/L confusion</title></rect><text x="737.3" y="173.7" class="bar-label">10.6pp</text><text x="496" y="244" text-anchor="middle" class="axis-title">percentage points of exact-match precision v1.3 loses to v1.2.2</text></svg>
+<p class="note">Forgiving I/L removes two thirds of the deficit on gluc and helaqc, half on wound fluids.
+Deamidation removes essentially none (&minus;12.25 &rarr; &minus;12.38 on gluc), and once <em>both</em> are
+forgiven the exact deficit lands <b>exactly</b> on the mass deficit &mdash; so the total splits into genuine
+sequencing loss plus isobaric confusion with no residual.</p>
+<p class="note callout">At the residue level on helaqc, where v1.3 has the backbone right and only the I/L
+calls are at stake: <b>v1.2.2 is correct on 95.5%</b> of I/L positions, <b>v1.3 on 89.8%</b> &mdash;
+<b>2.3&times; the error rate</b> &mdash; and v1.3 leans harder on the commoner residue (ground truth
+<b>65.5%</b> leucine, v1.2.2 <b>69.0%</b>, v1.3 <b>71.1%</b>). I and L are <b>exact isobars</b> at 113.084 Da,
+so only a learned sequence prior separates them: this is a <b>language-prior regression, not a
+spectrum-interpretation one</b>.</p>
+</section>
+<section>
+<h2>The test set exercises 18% of the vocabulary</h2>
+<p class="table-src">Internal held-out, 17 sets &middot; 1,702,287 ground-truth PSMs &middot; v1.3 133-residue vocabulary</p>
+<div class="two-col">
+<div>
+<table class="data compact">
+<tr><th>&nbsp;</th><th>count</th><th>of 133</th></tr>
+<tr><td>tokens in the vocabulary</td><td class='num'>133</td><td class='num'></td></tr><tr><td>present in the test set</td><td class='num'>24</td><td class='num'>18%</td></tr><tr><td>of the 112 modified tokens, ever observed</td><td class='num'>5</td><td class='num'>4%</td></tr><tr><td>modified tokens carrying real weight</td><td class='num'>4</td><td class='num'>3%</td></tr>
+</table>
+<p class="note">The four that carry weight are the standard closed-search set. Unmodified <b>C</b> never
+appears &mdash; it is always carbamidomethylated &mdash; and selenocysteine <b>U</b> never appears either,
+though the model can emit it: that is what crashed the scorer on the knapsack runs.</p>
+</div>
+<div>
+<table class="data compact">
+<tr><th>token</th><th>&nbsp;</th><th>count</th><th>share</th></tr>
+<tr><td><code>C[UNIMOD:4]</code></td><td>carbamidomethyl</td><td class='num'>244,995</td><td class='num'>0.958%</td></tr><tr><td><code>M[UNIMOD:35]</code></td><td>oxidation</td><td class='num'>121,866</td><td class='num'>0.477%</td></tr><tr><td><code>N[UNIMOD:7]</code></td><td>deamidation</td><td class='num'>90,200</td><td class='num'>0.353%</td></tr><tr><td><code>Q[UNIMOD:7]</code></td><td>deamidation</td><td class='num'>23,233</td><td class='num'>0.091%</td></tr><tr><td><code>[UNIMOD:1]</code></td><td>N-term acetyl</td><td class='num'>2</td><td class='num'>0.000%</td></tr>
+</table>
+<p class="note"><b>107 of the 112 modified tokens never occur once.</b> Whatever the extra residues buy,
+this test set cannot measure it.</p>
+</div>
+</div>
+<p class="note callout"><b>Would an open search change the comparison? No &mdash; measured, not assumed.</b>
+Of v1.3's exact-match failures, the share that share the ground truth's residue backbone and differ
+<em>only</em> in modifications is <b>0.0&ndash;0.1%</b> across six sample types, clinical wound fluids and
+immunopeptides included. In <b>zero</b> cases did v1.3 predict a modification the label lacks. So v1.3 is not
+being penalised for finding real PTMs that closed search missed, and relabelling would move nothing.</p>
+</section>
+<section>
 <h2>Cost is checkpoint-independent; knapsack is not</h2>
 <div class="two-col">
 <div>

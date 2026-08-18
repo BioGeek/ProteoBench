@@ -117,6 +117,50 @@ PER_DATASET_GREEDY = [
     ("human", 0.5593, 0.4976),
 ]
 
+# ── how much of the 133-residue vocabulary the test set actually exercises ──────────────
+# Counted over all 17 datasets' ground truth, 1,702,287 PSMs, tokenised the same way the
+# vocabulary is keyed (residue plus optional bracketed modification, N-terminal group separate).
+VOCAB_COVERAGE = [
+    ("tokens in the vocabulary", 133, ""),
+    ("present in the test set", 24, "18%"),
+    ("of the 112 modified tokens, ever observed", 5, "4%"),
+    ("modified tokens carrying real weight", 4, "3%"),
+]
+# token, count, share of all residue tokens in the ground truth
+VOCAB_OBSERVED_MODS = [
+    ("C[UNIMOD:4]", "carbamidomethyl", 244_995, 0.958),
+    ("M[UNIMOD:35]", "oxidation", 121_866, 0.477),
+    ("N[UNIMOD:7]", "deamidation", 90_200, 0.353),
+    ("Q[UNIMOD:7]", "deamidation", 23_233, 0.091),
+    ("[UNIMOD:1]", "N-term acetyl", 2, 0.000),
+]
+# v1.3's exact-match failures at beam-10, decomposed. dataset, n, %mod-only, %I/L-only, %different
+FAILURE_DECOMP = [
+    ("gluc", 34_023, 0.0, 43.1, 56.9),
+    ("herceptin", 192, 0.0, 37.5, 62.5),
+    ("immuno", 221, 0.0, 33.9, 66.1),
+    ("helaqc", 7_890, 0.1, 26.8, 73.1),
+    ("woundfluids", 2_572, 0.0, 11.9, 88.0),
+    ("snakevenoms", 7_184, 0.1, 10.6, 89.3),
+]
+
+# ── where v1.3's exact-match deficit actually comes from ────────────────────────────────
+# Exact-match rate under each ambiguity toggle, beam-10, from _scored/intermediate/*.parquet
+# (match_type, match_type_il, match_type_deam, match_type_both). Once BOTH I/L and deamidation
+# are forgiven, the exact deficit equals the mass deficit exactly, so the total decomposes into
+# genuine sequencing loss plus isobaric confusion with nothing left over.
+# dataset, total exact delta, delta after forgiving I/L, mass-level delta (all percentage points)
+IL_DECOMPOSITION = [
+    ("gluc", -12.25, -4.07, -4.22),
+    ("helaqc", -12.33, -4.53, -4.69),
+    ("woundfluids", -10.63, -5.93, -5.96),
+]
+# Per-position I/L accuracy on helaqc, conditioned on spectra where v1.3 has the backbone right
+# and only the I/L calls are at stake. 24,083 and 24,656 positions respectively.
+IL_POSITION_ACC = {"v1.2.2": 95.5, "v1.3": 89.8}
+# L share of I/L positions: ground truth against each checkpoint's predictions, helaqc.
+IL_L_SHARE = {"ground truth": 65.5, "v1.2.2": 69.0, "v1.3": 71.1}
+
 # ── per-dataset refinement delta on the internal held-out sets ──────────────────────────
 # pep/mass precision of (base + refinement) minus base, per dataset, from _scored/metrics.csv
 # (level=peptide, evaluation=mass, baseline ambiguity). Four base/refined pairs exist:
@@ -586,6 +630,55 @@ def per_dataset_dumbbell() -> str:
 # two well-separated divergences are labelled; every point keeps its full <title> on hover, and the
 # note carries the cluster's size.
 SCORER_LABEL_SKIP = {"bacillus", "yeast", "ricebean"}
+
+
+def il_decomposition_chart() -> str:
+    """Stacked decomposition of v1.3's exact-match deficit into sequencing loss and I/L confusion.
+
+    A stacked bar rather than grouped, because the two parts sum to the whole: forgiving I/L and
+    deamidation brings the exact deficit exactly onto the mass deficit, so the remainder is
+    attributable to isobaric confusion with no residual. Deamidation contributes ~0.15pp of it, which
+    is why the label says I/L rather than "isobaric".
+
+    Drawn as magnitudes with a note that every value is a loss; signing the axis would put all three
+    bars left of zero and waste half the width.
+    """
+    W, H = 900, 250
+    L, R, T, B = 132, 40, 34, 52
+    row_h = (H - T - B) / len(IL_DECOMPOSITION)
+    hi = 13.0
+
+    def px(v):
+        return L + v / hi * (W - L - R)
+
+    parts = []
+    for gv in (0, 3, 6, 9, 12):
+        parts.append(f'<line x1="{px(gv):.1f}" y1="{T - 4}" x2="{px(gv):.1f}" y2="{H - B}" '
+                     f'stroke="{C_GRID}" stroke-width="1"/>')
+        parts.append(f'<text x="{px(gv):.1f}" y="{H - B + 22}" text-anchor="middle" class="tick">{gv}</text>')
+
+    for i, (name, total, after_il, mass) in enumerate(IL_DECOMPOSITION):
+        y = T + i * row_h + 5
+        h = row_h - 14
+        seq, il = abs(mass), abs(total) - abs(mass)
+        parts.append(f'<text x="{L - 12}" y="{y + h / 2 + 5:.1f}" text-anchor="end" class="tick strong">{esc(name)}</text>')
+        parts.append(
+            f'<rect x="{L}" y="{y:.1f}" width="{px(seq) - L:.1f}" height="{h:.1f}" fill="{C_V130}" opacity="0.9">'
+            f"<title>{esc(name)}: {seq:.2f}pp lost at mass level -- genuine sequencing</title></rect>"
+        )
+        parts.append(
+            f'<rect x="{px(seq):.1f}" y="{y:.1f}" width="{px(il) - L:.1f}" height="{h:.1f}" fill="{C_V130}" opacity="0.35">'
+            f"<title>{esc(name)}: a further {il:.2f}pp lost only to I/L confusion</title></rect>"
+        )
+        parts.append(f'<text x="{px(abs(total)) + 10:.1f}" y="{y + h / 2 + 5:.1f}" class="bar-label">'
+                     f"{abs(total):.1f}pp</text>")
+    parts.append(f'<text x="{(L + W - R) / 2:.0f}" y="{H - 6}" text-anchor="middle" class="axis-title">'
+                 f"percentage points of exact-match precision v1.3 loses to v1.2.2</text>")
+    legend = (f'<span class="key"><i style="background:{C_V130}"></i>genuine sequencing loss (mass level)</span>'
+              f'<span class="key"><i style="background:{C_V130};opacity:.35"></i>I/L confusion only</span>')
+    return f'<div class="legend">{legend}</div>' + svg(
+        W, H, "".join(parts), "v1.3's exact-match deficit split into sequencing loss and I/L confusion"
+    )
 
 
 def refinement_delta_chart() -> str:
@@ -1078,6 +1171,53 @@ as 0.5745 &rarr; 0.5772 (v1.3.0 <em>ahead</em>). Its v1.3 side is our run; its v
 workbook tab named <code>instanovo_1_2_2_with_new_splits</code>. The residual proves it: <b>&minus;0.0186</b>
 on the nine re-splittable <code>ninespecies</code> sets against <b>&minus;0.0022</b> on the eight test-only
 biological ones. Both arms here share one split.</p>
+""")
+
+slide(f"""
+<h2>The exact-match loss is isoleucine/leucine, not modifications</h2>
+{src("Internal held-out", "beam-10", "v1.3 against v1.2.2", "exact-match precision")}
+{il_decomposition_chart()}
+<p class="note">Forgiving I/L removes two thirds of the deficit on gluc and helaqc, half on wound fluids.
+Deamidation removes essentially none (&minus;12.25 &rarr; &minus;12.38 on gluc), and once <em>both</em> are
+forgiven the exact deficit lands <b>exactly</b> on the mass deficit &mdash; so the total splits into genuine
+sequencing loss plus isobaric confusion with no residual.</p>
+<p class="note callout">At the residue level on helaqc, where v1.3 has the backbone right and only the I/L
+calls are at stake: <b>v1.2.2 is correct on 95.5%</b> of I/L positions, <b>v1.3 on 89.8%</b> &mdash;
+<b>2.3&times; the error rate</b> &mdash; and v1.3 leans harder on the commoner residue (ground truth
+<b>65.5%</b> leucine, v1.2.2 <b>69.0%</b>, v1.3 <b>71.1%</b>). I and L are <b>exact isobars</b> at 113.084 Da,
+so only a learned sequence prior separates them: this is a <b>language-prior regression, not a
+spectrum-interpretation one</b>.</p>
+""")
+
+slide(f"""
+<h2>The test set exercises 18% of the vocabulary</h2>
+{src("Internal held-out, 17 sets", "1,702,287 ground-truth PSMs", "v1.3 133-residue vocabulary")}
+<div class="two-col">
+<div>
+<table class="data compact">
+<tr><th>&nbsp;</th><th>count</th><th>of 133</th></tr>
+{"".join(f"<tr><td>{esc(lbl)}</td><td class='num'>{n}</td><td class='num'>{esc(pct)}</td></tr>"
+         for lbl, n, pct in VOCAB_COVERAGE)}
+</table>
+<p class="note">The four that carry weight are the standard closed-search set. Unmodified <b>C</b> never
+appears &mdash; it is always carbamidomethylated &mdash; and selenocysteine <b>U</b> never appears either,
+though the model can emit it: that is what crashed the scorer on the knapsack runs.</p>
+</div>
+<div>
+<table class="data compact">
+<tr><th>token</th><th>&nbsp;</th><th>count</th><th>share</th></tr>
+{"".join(f"<tr><td><code>{esc(tok)}</code></td><td>{esc(name)}</td><td class='num'>{n:,}</td>"
+         f"<td class='num'>{share:.3f}%</td></tr>" for tok, name, n, share in VOCAB_OBSERVED_MODS)}
+</table>
+<p class="note"><b>107 of the 112 modified tokens never occur once.</b> Whatever the extra residues buy,
+this test set cannot measure it.</p>
+</div>
+</div>
+<p class="note callout"><b>Would an open search change the comparison? No &mdash; measured, not assumed.</b>
+Of v1.3's exact-match failures, the share that share the ground truth's residue backbone and differ
+<em>only</em> in modifications is <b>0.0&ndash;0.1%</b> across six sample types, clinical wound fluids and
+immunopeptides included. In <b>zero</b> cases did v1.3 predict a modification the label lacks. So v1.3 is not
+being penalised for finding real PTMs that closed search missed, and relabelling would move nothing.</p>
 """)
 
 slide(f"""
