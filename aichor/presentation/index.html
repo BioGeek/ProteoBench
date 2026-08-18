@@ -660,11 +660,41 @@ though the model can emit it: that is what crashed the scorer on the knapsack ru
 this test set cannot measure it.</p>
 </div>
 </div>
-<p class="note callout"><b>Would an open search change the comparison? No &mdash; measured, not assumed.</b>
-Of v1.3's exact-match failures, the share that share the ground truth's residue backbone and differ
-<em>only</em> in modifications is <b>0.0&ndash;0.1%</b> across six sample types, clinical wound fluids and
-immunopeptides included. In <b>zero</b> cases did v1.3 predict a modification the label lacks. So v1.3 is not
-being penalised for finding real PTMs that closed search missed, and relabelling would move nothing.</p>
+<p class="note callout"><b>Would an open search change the comparison? Essentially no.</b> Of v1.3's
+exact-match failures, the share that keep the ground truth's residue backbone and differ <em>only</em> in
+modifications is <b>0.0&ndash;0.1%</b> across six sample types. The labels are also mass-consistent: they
+explain <b>99.8%</b> of observed precursor masses to within 20 ppm. There <em>is</em> one real unlabelled
+modification &mdash; acetylation, <b>0.069%</b> of PSMs (next slide).</p>
+<p class="note warn"><b>If you do search, search gluc &mdash; not wound fluids or immuno.</b> The intuitive
+picks are the two worst: immuno is <b>100.00%</b> mass-explained with zero unexplained PSMs, and wound fluids'
+16 are all Met clipping with <b>no</b> acetylation. Only <b>gluc</b> carries a real population, at
+<b>1.04%</b>. The blocker is that neither repo records a FASTA for these datasets, and with the wrong database
+every peptide becomes an unexplained delta mass &mdash; the very signal being measured.</p>
+</section>
+<section>
+<h2>The only modification the labels miss is acetylation</h2>
+<p class="table-src">All 17 internal sets &middot; 1,702,287 ground-truth PSMs &middot; theoretical peptide mass vs observed precursor</p>
+<div class="legend"><span class="key"><i style="background:var(--diverge-warm)"></i>a real modification the label lacks</span><span class="key"><i style="background:var(--text-muted)"></i>label artefact, no modification</span></div><svg viewBox="0 0 1100 260" width="100%" role="img" aria-label="Unexplained precursor-mass residuals cluster at three discrete masses" class="chart" style="font-size:14.67px"><line x1="62" y1="202" x2="1060" y2="202" stroke="var(--text-secondary)" stroke-width="2"/><line x1="86.3" y1="202" x2="86.3" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="86.3" y="224" text-anchor="middle" class="tick">-140</text><line x1="183.7" y1="202" x2="183.7" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="183.7" y="224" text-anchor="middle" class="tick">-120</text><line x1="281.1" y1="202" x2="281.1" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="281.1" y="224" text-anchor="middle" class="tick">-100</text><line x1="378.4" y1="202" x2="378.4" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="378.4" y="224" text-anchor="middle" class="tick">-80</text><line x1="475.8" y1="202" x2="475.8" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="475.8" y="224" text-anchor="middle" class="tick">-60</text><line x1="573.2" y1="202" x2="573.2" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="573.2" y="224" text-anchor="middle" class="tick">-40</text><line x1="670.5" y1="202" x2="670.5" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="670.5" y="224" text-anchor="middle" class="tick">-20</text><line x1="767.9" y1="202" x2="767.9" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="767.9" y="224" text-anchor="middle" class="tick">+0</text><line x1="865.3" y1="202" x2="865.3" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="865.3" y="224" text-anchor="middle" class="tick">+20</text><line x1="962.6" y1="202" x2="962.6" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="962.6" y="224" text-anchor="middle" class="tick">+40</text><line x1="1060.0" y1="202" x2="1060.0" y2="207" stroke="var(--text-secondary)" stroke-width="1"/><text x="1060.0" y="224" text-anchor="middle" class="tick">+60</text><line x1="62" y1="167.0" x2="1060" y2="167.0" stroke="var(--grid)" stroke-width="1"/><text x="54" y="171.0" text-anchor="end" class="tick">250</text><line x1="62" y1="132.0" x2="1060" y2="132.0" stroke="var(--grid)" stroke-width="1"/><text x="54" y="136.0" text-anchor="end" class="tick">500</text><line x1="62" y1="97.0" x2="1060" y2="97.0" stroke="var(--grid)" stroke-width="1"/><text x="54" y="101.0" text-anchor="end" class="tick">750</text><line x1="62" y1="62.0" x2="1060" y2="62.0" stroke="var(--grid)" stroke-width="1"/><text x="54" y="66.0" text-anchor="end" class="tick">1,000</text><line x1="130.0" y1="202" x2="130.0" y2="115.2" stroke="var(--text-muted)" stroke-width="7" stroke-linecap="round"><title>-131.04 Da: 620 PSMs -- initiator Met in the label, not in the peptide</title></line><circle cx="130.0" cy="115.2" r="6" fill="var(--text-muted)"/><text x="130.0" y="99.2" text-anchor="middle" class="bar-label">620</text><text x="130.0" y="75.2" text-anchor="middle" class="tick strong">-131.04 Da</text><line x1="334.5" y1="202" x2="334.5" y2="72.6" stroke="var(--diverge-warm)" stroke-width="7" stroke-linecap="round"><title>-89.03 Da: 924 PSMs -- Met clipping + acetylation (131.040 &minus; 42.011)</title></line><circle cx="334.5" cy="72.6" r="6" fill="var(--diverge-warm)"/><text x="334.5" y="56.6" text-anchor="middle" class="bar-label">924</text><text x="334.5" y="32.6" text-anchor="middle" class="tick strong">-89.03 Da</text><line x1="972.4" y1="202" x2="972.4" y2="166.2" stroke="var(--diverge-warm)" stroke-width="7" stroke-linecap="round"><title>+42.01 Da: 256 PSMs -- acetylation the label lacks</title></line><circle cx="972.4" cy="166.2" r="6" fill="var(--diverge-warm)"/><text x="986.4" y="150.2" text-anchor="start" class="bar-label">256</text><text x="986.4" y="126.2" text-anchor="start" class="tick strong">+42.01 Da</text><text x="561" y="252" text-anchor="middle" class="axis-title">observed precursor mass minus the labelled peptide's mass (Da)</text></svg>
+<div class="two-col">
+<div>
+<p class="note"><b>99.806%</b> of labels explain the observed precursor within 20 ppm, and every residual that
+does not sits at one of <b>three discrete masses</b> &mdash; no diffuse landscape of hidden modification. Two
+are methionine: <b>&minus;131.04</b> is an initiator Met the label carries and the peptide does not,
+<b>&minus;89.03</b> is that clipping <em>plus</em> acetylation (131.040 &minus; 42.011). Every such label begins
+with M, in all five datasets &mdash; measured, not inferred.</p>
+</div>
+<div>
+<table class="data compact">
+<tr><th>dataset</th><th>PSMs</th><th>unlabelled acetyl</th><th>% of set</th></tr>
+<tr><td>gluc</td><td class='num'>113,373</td><td class='num'>1,174</td><td class='num'>1.04%</td></tr><tr><td>tplantibodies</td><td class='num'>20,414</td><td class='num'>6</td><td class='num'>0.03%</td></tr>
+<tr><td><b>all 17</b></td><td class='num'>1,702,287</td><td class='num'><b>1,180</b></td>
+    <td class='num'><b>0.069%</b></td></tr>
+</table>
+<p class="note">Acetylation <em>is</em> in the vocabulary as <code>[UNIMOD:1]</code>, ~<b>1,180</b> spectra
+carry it, and the labels credit exactly <b>2</b>: the model is marked wrong for being right, on the one extra
+residue this data exercises.</p>
+</div>
+</div>
 </section>
 <section>
 <h2>Cost is checkpoint-independent; knapsack is not</h2>

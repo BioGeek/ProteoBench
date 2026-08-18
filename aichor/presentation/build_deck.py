@@ -117,6 +117,23 @@ PER_DATASET_GREEDY = [
     ("human", 0.5593, 0.4976),
 ]
 
+# ── do the labels explain the observed precursor masses? ────────────────────────────────
+# Theoretical neutral mass of every ground-truth peptidoform (residue masses taken from the
+# vocabulary the model was trained with, plus water) against the observed precursor neutral mass,
+# over all 17 datasets, 1,702,287 PSMs. 99.806% agree within 20 ppm. Every residual that does not
+# falls at one of three discrete masses -- there is no diffuse landscape of unexplained modification.
+# residual Da, label, PSMs, whether it is a real modification the label lacks
+MASS_RESIDUALS = [
+    (-131.04, "initiator Met in the label, not in the peptide", 620, False),
+    (-89.03, "Met clipping + acetylation (131.040 &minus; 42.011)", 924, True),
+    (42.01, "acetylation the label lacks", 256, True),
+]
+# where the unlabelled acetylation lives. dataset, PSMs, acetyl-only, Met+acetyl, % of set
+ACETYL_BY_DATASET = [
+    ("gluc", 113_373, 251, 923, 1.04),
+    ("tplantibodies", 20_414, 5, 1, 0.03),
+]
+
 # ── how much of the 133-residue vocabulary the test set actually exercises ──────────────
 # Counted over all 17 datasets' ground truth, 1,702,287 PSMs, tokenised the same way the
 # vocabulary is keyed (residue plus optional bracketed modification, N-terminal group separate).
@@ -630,6 +647,57 @@ def per_dataset_dumbbell() -> str:
 # two well-separated divergences are labelled; every point keeps its full <title> on hover, and the
 # note carries the cluster's size.
 SCORER_LABEL_SKIP = {"bacillus", "yeast", "ricebean"}
+
+
+def mass_residual_chart() -> str:
+    """Where the unexplained precursor mass sits: three discrete spikes, not a landscape.
+
+    A stem plot on a mass axis rather than a histogram of bins, because the finding is that the
+    residuals are *discrete*. Three spikes at chemically named masses is the whole argument that
+    nothing else is hiding; a binned histogram would blur exactly that and invite the reader to
+    imagine a continuum. Stems are labelled with their chemistry, and coloured by whether they
+    represent a real modification the label lacks or merely a label artefact.
+    """
+    W, H = 1100, 260
+    L, R, T, B = 62, 40, 62, 58
+    lo, hi = -145.0, 60.0
+    top = 1000
+
+    def px(v):
+        return L + (v - lo) / (hi - lo) * (W - L - R)
+
+    def py(c):
+        return (H - B) - c / top * (H - B - T)
+
+    parts = [f'<line x1="{L}" y1="{H - B}" x2="{W - R}" y2="{H - B}" stroke="var(--text-secondary)" stroke-width="2"/>']
+    for gv in (-140, -120, -100, -80, -60, -40, -20, 0, 20, 40, 60):
+        parts.append(f'<line x1="{px(gv):.1f}" y1="{H - B}" x2="{px(gv):.1f}" y2="{H - B + 5}" '
+                     f'stroke="var(--text-secondary)" stroke-width="1"/>')
+        parts.append(f'<text x="{px(gv):.1f}" y="{H - B + 22}" text-anchor="middle" class="tick">{gv:+d}</text>')
+    for gc in (250, 500, 750, 1000):
+        parts.append(f'<line x1="{L}" y1="{py(gc):.1f}" x2="{W - R}" y2="{py(gc):.1f}" '
+                     f'stroke="{C_GRID}" stroke-width="1"/>')
+        parts.append(f'<text x="{L - 8}" y="{py(gc) + 4:.1f}" text-anchor="end" class="tick">{gc:,}</text>')
+
+    for mass, label, count, real in MASS_RESIDUALS:
+        x, colour = px(mass), (C_OVER if real else C_MUTED)
+        parts.append(f'<line x1="{x:.1f}" y1="{H - B}" x2="{x:.1f}" y2="{py(count):.1f}" '
+                     f'stroke="{colour}" stroke-width="7" stroke-linecap="round">'
+                     f"<title>{mass:+.2f} Da: {count:,} PSMs -- {label}</title></line>")
+        parts.append(f'<circle cx="{x:.1f}" cy="{py(count):.1f}" r="6" fill="{colour}"/>')
+        anchor = "start" if mass > 0 else "middle"
+        dx = 14 if mass > 0 else 0
+        parts.append(f'<text x="{x + dx:.1f}" y="{py(count) - 16:.1f}" text-anchor="{anchor}" '
+                     f'class="bar-label">{count:,}</text>')
+        parts.append(f'<text x="{x + dx:.1f}" y="{py(count) - 40:.1f}" text-anchor="{anchor}" '
+                     f'class="tick strong">{mass:+.2f} Da</text>')
+    parts.append(f'<text x="{(L + W - R) / 2:.0f}" y="{H - 8}" text-anchor="middle" class="axis-title">'
+                 f"observed precursor mass minus the labelled peptide's mass (Da)</text>")
+    legend = (f'<span class="key"><i style="background:{C_OVER}"></i>a real modification the label lacks</span>'
+              f'<span class="key"><i style="background:{C_MUTED}"></i>label artefact, no modification</span>')
+    return f'<div class="legend">{legend}</div>' + svg(
+        W, H, "".join(parts), "Unexplained precursor-mass residuals cluster at three discrete masses"
+    )
 
 
 def il_decomposition_chart() -> str:
@@ -1213,11 +1281,43 @@ though the model can emit it: that is what crashed the scorer on the knapsack ru
 this test set cannot measure it.</p>
 </div>
 </div>
-<p class="note callout"><b>Would an open search change the comparison? No &mdash; measured, not assumed.</b>
-Of v1.3's exact-match failures, the share that share the ground truth's residue backbone and differ
-<em>only</em> in modifications is <b>0.0&ndash;0.1%</b> across six sample types, clinical wound fluids and
-immunopeptides included. In <b>zero</b> cases did v1.3 predict a modification the label lacks. So v1.3 is not
-being penalised for finding real PTMs that closed search missed, and relabelling would move nothing.</p>
+<p class="note callout"><b>Would an open search change the comparison? Essentially no.</b> Of v1.3's
+exact-match failures, the share that keep the ground truth's residue backbone and differ <em>only</em> in
+modifications is <b>0.0&ndash;0.1%</b> across six sample types. The labels are also mass-consistent: they
+explain <b>99.8%</b> of observed precursor masses to within 20 ppm. There <em>is</em> one real unlabelled
+modification &mdash; acetylation, <b>0.069%</b> of PSMs (next slide).</p>
+<p class="note warn"><b>If you do search, search gluc &mdash; not wound fluids or immuno.</b> The intuitive
+picks are the two worst: immuno is <b>100.00%</b> mass-explained with zero unexplained PSMs, and wound fluids'
+16 are all Met clipping with <b>no</b> acetylation. Only <b>gluc</b> carries a real population, at
+<b>1.04%</b>. The blocker is that neither repo records a FASTA for these datasets, and with the wrong database
+every peptide becomes an unexplained delta mass &mdash; the very signal being measured.</p>
+""")
+
+slide(f"""
+<h2>The only modification the labels miss is acetylation</h2>
+{src("All 17 internal sets", "1,702,287 ground-truth PSMs", "theoretical peptide mass vs observed precursor")}
+{mass_residual_chart()}
+<div class="two-col">
+<div>
+<p class="note"><b>99.806%</b> of labels explain the observed precursor within 20 ppm, and every residual that
+does not sits at one of <b>three discrete masses</b> &mdash; no diffuse landscape of hidden modification. Two
+are methionine: <b>&minus;131.04</b> is an initiator Met the label carries and the peptide does not,
+<b>&minus;89.03</b> is that clipping <em>plus</em> acetylation (131.040 &minus; 42.011). Every such label begins
+with M, in all five datasets &mdash; measured, not inferred.</p>
+</div>
+<div>
+<table class="data compact">
+<tr><th>dataset</th><th>PSMs</th><th>unlabelled acetyl</th><th>% of set</th></tr>
+{"".join(f"<tr><td>{esc(ds)}</td><td class='num'>{n:,}</td><td class='num'>{a + ma:,}</td>"
+         f"<td class='num'>{pct:.2f}%</td></tr>" for ds, n, a, ma, pct in ACETYL_BY_DATASET)}
+<tr><td><b>all 17</b></td><td class='num'>1,702,287</td><td class='num'><b>1,180</b></td>
+    <td class='num'><b>0.069%</b></td></tr>
+</table>
+<p class="note">Acetylation <em>is</em> in the vocabulary as <code>[UNIMOD:1]</code>, ~<b>1,180</b> spectra
+carry it, and the labels credit exactly <b>2</b>: the model is marked wrong for being right, on the one extra
+residue this data exercises.</p>
+</div>
+</div>
 """)
 
 slide(f"""
