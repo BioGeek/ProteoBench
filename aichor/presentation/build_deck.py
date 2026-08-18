@@ -91,6 +91,26 @@ PER_DATASET_GREEDY = [
     ("human", 0.5593, 0.4976),
 ]
 
+# ── the same predictions scored twice: InstaNovo Metrics vs ProteoBench ─────────────────
+# dataset, instanovo Metrics (0.5/0.1 Da), proteobench (50/20 ppm), for v1.2.2 greedy.
+# From each run's own instanovo_results.csv and _scored/metrics.csv respectively.
+RECON_V122_GREEDY = [
+    ("herceptin", 0.7164, 0.7338), ("ricebean", 0.6342, 0.6421), ("human", 0.5515, 0.5593),
+    ("bacillus", 0.6389, 0.6437), ("yeast", 0.6346, 0.6387), ("mmazei", 0.5850, 0.5888),
+    ("tomato", 0.6413, 0.6427), ("honeybee", 0.5342, 0.5350), ("mouse", 0.5503, 0.5511),
+    ("tplantibodies", 0.4858, 0.4861), ("clambacteria", 0.4719, 0.4721), ("gluc", 0.8394, 0.8394),
+    ("immuno", 0.7178, 0.7178), ("helaqc", 0.6410, 0.6410), ("sbrodae", 0.7488, 0.7487),
+    ("snakevenoms", 0.2033, 0.2032), ("woundfluids", 0.3574, 0.3571),
+]
+SCORER_DIFFS = [
+    ("cumulative mass tolerance", "50 ppm", "0.5 Da"),
+    ("individual residue tolerance", "20 ppm", "0.1 Da"),
+    ("unit", "ppm", "Dalton"),
+    ("peptide criterion", "prefix + suffix alignment", "equal length, all residues matched"),
+    ("I/L", "forgiven by mass mode; toggles on exact", "unified in aa_er, commented out in precision"),
+    ("empty prediction set", "handled via coverage", "precision returns 1.0"),
+]
+
 # ── Winnow calibration study, beam10 on ProteoBench (Notion sections 5, 15, 26) ─────────
 WINNOW_HEADLINE = [
     ("sTECE", "−0.04405"),
@@ -445,6 +465,53 @@ def per_dataset_dumbbell() -> str:
     return f'<div class="legend">{legend}</div>' + svg(W, H, "".join(parts), "Per-dataset peptide recall, v1.2.2 against v1.3.0, greedy decoding")
 
 
+def scorer_agreement() -> str:
+    """The same predictions under both scorers, against y = x.
+
+    A scatter against the identity line, because the question is agreement between two
+    measurements of one thing -- the distance from the diagonal *is* the disagreement. One
+    series, so no legend; the datasets that separate are labelled and the rest left clean.
+    """
+    W, H = 900, 400
+    L, R, T, B = 78, 40, 24, 56
+    lo, hi = 0.18, 0.88
+
+    def px(v):
+        return L + (v - lo) / (hi - lo) * (W - L - R)
+
+    def py(v):
+        return H - B - (v - lo) / (hi - lo) * (H - B - T)
+
+    parts = []
+    for gv in [0.2, 0.4, 0.6, 0.8]:
+        parts.append(f'<line x1="{px(gv):.1f}" y1="{T}" x2="{px(gv):.1f}" y2="{H-B}" stroke="{C_GRID}" stroke-width="1"/>')
+        parts.append(f'<line x1="{L}" y1="{py(gv):.1f}" x2="{W-R}" y2="{py(gv):.1f}" stroke="{C_GRID}" stroke-width="1"/>')
+        parts.append(f'<text x="{px(gv):.1f}" y="{H-B+20}" text-anchor="middle" class="tick">{gv:.1f}</text>')
+        parts.append(f'<text x="{L-10}" y="{py(gv)+4:.1f}" text-anchor="end" class="tick">{gv:.1f}</text>')
+    parts.append(f'<line x1="{px(lo):.1f}" y1="{py(lo):.1f}" x2="{px(hi):.1f}" y2="{py(hi):.1f}" '
+                 f'stroke="var(--text-secondary)" stroke-width="2" stroke-dasharray="6 4"/>')
+    parts.append(f'<text x="{px(0.80):.1f}" y="{py(0.78)+4:.1f}" class="tick">perfect agreement</text>')
+    for name, ins, pb in RECON_V122_GREEDY:
+        parts.append(
+            f'<circle cx="{px(ins):.1f}" cy="{py(pb):.1f}" r="6" fill="{C_V122}" stroke="var(--surface-1)" '
+            f'stroke-width="2"><title>{esc(name)}: InstaNovo {ins:.4f}, ProteoBench {pb:.4f} '
+            f'({pb-ins:+.4f})</title></circle>'
+        )
+        if abs(pb - ins) > 0.004:
+            parts.append(f'<text x="{px(ins)+11:.1f}" y="{py(pb)+4:.1f}" class="pt-label">{esc(name)} {pb-ins:+.4f}</text>')
+    parts.append(f'<text x="{(L+W-R)/2:.0f}" y="{H-6}" text-anchor="middle" class="axis-title">InstaNovo Metrics — 0.5 / 0.1 Da</text>')
+    parts.append(f'<text x="14" y="{T+6}" class="axis-title">ProteoBench — 50 / 20 ppm</text>')
+    return svg(W, H, "".join(parts), "Peptide recall per dataset under both scorers, against the identity line")
+
+
+def scorer_table() -> str:
+    head = "<tr><th>property</th><th>ProteoBench <code>DenovoScores</code></th><th>InstaNovo <code>Metrics</code></th></tr>"
+    rows = "".join(
+        f"<tr><td class='mode'>{esc(a)}</td><td>{b}</td><td>{c}</td></tr>" for a, b, c in SCORER_DIFFS
+    )
+    return f"<table class='data'>{head}{rows}</table>"
+
+
 def status_matrix() -> str:
     """One table per benchmark. Every cell is a mode that benchmark actually has, so there are
     no placeholder dashes to misread as missing work."""
@@ -655,11 +722,11 @@ slide(f"""
 <b>+7.2</b>, immuno <b>+3.2</b> &mdash; and both are antibody or immunopeptide samples. The losses are broad,
 with human <b>&minus;6.2</b> and gluc <b>&minus;4.3</b>. Spectrum-weighted pooling gives a wider gap still
 (0.6031 &rarr; 0.5852), because the large <code>ninespecies</code> sets are where v1.2.2 leads.</p>
-<p class="note warn"><b>Unresolved:</b> an existing version of this chart reports the greedy means as
-0.5745 &rarr; 0.5772 (+0.27 pp, v1.3.0 <em>ahead</em>) with six datasets carrying the opposite sign
-(yeast, mmazei, tomato, bacillus, ricebean, clambacteria). These figures come from
-<code>_scored/metrics.csv</code>, i.e. ProteoBench's scorer at peptide/mass. The other chart's metric source
-needs identifying before either is presented &mdash; they disagree on the direction of the headline.</p>
+<p class="note warn"><b>Resolved &mdash; and it was not the metric.</b> An existing chart reports these
+greedy means as 0.5745 &rarr; 0.5772 (+0.27 pp, v1.3.0 <em>ahead</em>). Scoring the same predictions with
+InstaNovo's own <code>Metrics</code> gives 0.5854 &rarr; 0.5772: the v1.3 side matches that chart exactly, the
+v1.2.2 side does not. Its v1.2.2 baseline is a <b>different run</b>, not a different measurement &mdash; see
+the scorer-comparison slide.</p>
 """)
 
 slide(f"""
@@ -763,6 +830,31 @@ features improve most: <code>xcorr</code> moves from apparently <em>inverse</em>
 An earlier claim that the Koina features "barely discriminate" was an artefact of that range restriction and is
 withdrawn. One earlier finding survives: the calibrator's combined output (0.877) still does not beat its single
 best input, <code>median_margin</code> (0.889).</p>
+""")
+
+slide(f"""
+<h2>Two scorers: different by construction, agreeing in practice</h2>
+{src("Internal held-out, 17 sets", "greedy decoding", "v1.2.2", "same predictions, scored twice")}
+<div class="two-col">
+<div>
+{scorer_table()}
+<p class="note">Same parameter names, same defaults-shaped API, different physics. On a ~100 Da residue
+ProteoBench allows 0.002 Da against InstaNovo's 0.1 Da; on a 1000 Da prefix, 0.05 Da against 0.5 Da. Identical
+in v1.2.2 and v1.3.0 &mdash; this is a scorer difference, not a version one.</p>
+</div>
+<div>
+{scorer_agreement()}
+</div>
+</div>
+<p class="note">Despite tolerances differing by 10&ndash;50&times;, the per-dataset means differ by under
+<b>0.003</b>, and ProteoBench is marginally <em>looser</em> in 14 of 17 &mdash; the opposite of what tolerance
+alone predicts, because its bidirectional prefix/suffix alignment offsets the tighter threshold. <b>Both
+scorers agree the v1.3 checkpoint is behind</b>: &minus;0.82 pp by InstaNovo's, &minus;1.02 pp by
+ProteoBench's.</p>
+<p class="note warn"><b>So the conflicting chart is not a metric problem.</b> Its v1.3 figure (0.5772) matches
+our v1.3 run under InstaNovo <code>Metrics</code> exactly; its v1.2.2 figure (0.5745) matches neither of ours
+(0.5854, 0.5883). The two sides are different experiments &mdash; the v1.2.2 baseline is another run. An
+earlier version of this deck blamed the scorer; that was wrong.</p>
 """)
 
 slide("""

@@ -63,7 +63,28 @@ Both light and dark are selected — the dark values are their own steps against
 not an automatic flip. Every chart carries direct value labels, so identity and magnitude never
 depend on colour alone, and each mark has a `<title>` for hover.
 
-## Open discrepancy — read before presenting the per-dataset slide
+## The two scorers, and the resolved discrepancy
+
+InstaNovo's `Metrics` and ProteoBench's `DenovoScores` are different measurements: **50/20 ppm**
+against **0.5/0.1 Da**, bidirectional prefix+suffix alignment against equal-length-all-matched,
+and `precision = 1.0` on an empty prediction set. Identical in v1.2.2 and v1.3.0, so it is a
+scorer difference rather than a version one.
+
+Run over the same 17 prediction sets they agree to within **0.003** on the mean, with ProteoBench
+marginally *looser* in 14 of 17 — the opposite of what the tolerance predicts, because the
+bidirectional alignment offsets the tighter threshold. Both put the v1.3 checkpoint behind
+(−0.82 pp and −1.02 pp).
+
+That resolves the discrepancy this section used to describe as open. The conflicting chart's v1.3
+figure (0.5772) matches our run under InstaNovo `Metrics` **exactly**; its v1.2.2 figure (0.5745)
+matches neither of ours (0.5854 InstaNovo, 0.5883 ProteoBench). **Its v1.2.2 baseline is a
+different run, not a different metric** — identifying which run remains open. An earlier version
+of this README blamed the metric; that was wrong.
+
+Also never compare `pep_recall_at_0.050_fdr` against either headline: it is a third quantity
+(clambacteria 0.153 against 0.472 unfiltered).
+
+## Superseded: the discrepancy as first written
 
 An existing chart of the same comparison (v1.2.2 vs v1.3.0 peptide recall, per dataset, faceted by
 decoding mode) reports **greedy means 0.5745 → 0.5772, +0.27 pp with v1.3.0 ahead**.
