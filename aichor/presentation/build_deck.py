@@ -37,21 +37,30 @@ PB_V122 = [
     ("knapsack beam (10) + refinement", 0.7321, 0.4437, 0.7142, 0.8621, 0.9260, 35.83),
 ]
 
-# ProteoBench, InstaNovo v1.3.0 — only greedy has landed (experiment 9685299a,
-# metrics_summary.csv). The other six are running.
+# ProteoBench, InstaNovo v1.3.0. mode -> (pep/mass, pep/exact, aa/mass), from each run's own
+# metrics_summary.csv. greedy 9685299a, beam10 b934d33f, greedy_refined re-scored as 50a09a12
+# after the N-terminal length crash. diffusion_only and the two knapsack modes are still running;
+# beam10_refined and knapsack_beam10_refined are queued for re-scoring.
+PB_V130 = {
+    "greedy": (0.695058, 0.447481, 0.834528),
+    "beam10": (0.7295, 0.4677, 0.8651),
+    "greedy_refined": (0.6927, 0.4461, 0.8343),
+}
 PB_V130_GREEDY = {"pep_mass": 0.695058, "pep_exact": 0.447481, "aa_mass": 0.834528, "hours": 1.87}
 
 # ── internal held-out sets, pooled over all 17 (scored with ProteoBench's own scorer) ───
 # mode, pep/mass, aa/mass, pep AUC, wall clock
 INTERNAL_V130 = [
     ("greedy", 0.5852, 0.7289, 0.8668, "5 h 40 m"),
-    ("greedy + refinement", 0.5823, 0.7249, 0.8056, "8 h 42 m"),
+    ("beam-5", 0.6448, 0.7824, 0.8825, "16 h 50 m"),
     ("knapsack beam-5", 0.6458, 0.7813, 0.8851, "121 h"),
+    ("greedy + refinement", 0.5823, 0.7249, 0.8056, "8 h 42 m"),
     ("knapsack beam-5 + refinement", 0.6408, 0.7771, 0.8357, "8 h 57 m"),
 ]
 INTERNAL_V122 = [
     ("greedy", 0.6031, 0.7483, 0.8785, "5 h 51 m"),
-    ("diffusion only", 0.5885, 0.7600, 0.9364, "8 h 24 m"),
+    ("beam-5", 0.6526, 0.7889, 0.8895, "16 h 32 m"),
+    ("diffusion only", 0.5885, 0.7600, 0.8615, "8 h 24 m"),
 ]
 
 # ── per-dataset, per-checkpoint peptide/mass recall on the internal sets ────────────────
@@ -138,17 +147,21 @@ MODES_INT = ["greedy", "beam-5", "beam-10", "knapsack-5", "greedy+ref", "beam-5+
 STATUS = [
     ("ProteoBench nine-species balanced", MODES_PB, [
         ("v1.2.2", dict.fromkeys(MODES_PB, "done")),
-        ("v1.3.0", {**dict.fromkeys(MODES_PB, "running"), "greedy": "done"}),
+        ("v1.3.0", {
+            "greedy": "done", "beam-10": "done", "greedy+ref": "done",
+            "beam-10+ref": "running", "knapsack-10": "running",
+            "knapsack-10+ref": "running", "diffusion": "running",
+        }),
     ]),
     ("Internal held-out (17 sets)", MODES_INT, [
         ("v1.3", {
             "greedy": "done", "greedy+ref": "done", "knapsack-5": "done", "knapsack-5+ref": "done",
-            "beam-5": "scoring", "diffusion": "scoring", "beam-5+ref": "running", "beam-10": "running",
+            "beam-5": "done", "diffusion": "scoring", "beam-5+ref": "scoring", "beam-10": "scoring",
             "beam-10+ref": "planned",
         }),
         ("v1.2.2", {
-            "greedy": "done", "diffusion": "done", "beam-5": "scoring", "beam-10": "running",
-            "beam-5+ref": "running", "greedy+ref": "planned", "beam-10+ref": "planned",
+            "greedy": "done", "diffusion": "done", "beam-5": "done", "beam-10": "scoring",
+            "beam-5+ref": "scoring", "greedy+ref": "planned", "beam-10+ref": "planned",
             "knapsack-5": "skipped", "knapsack-5+ref": "skipped",
         }),
     ]),
@@ -596,27 +609,39 @@ held-out sets the same operation on the v1.3 checkpoint is <b>negative in 17 of 
 
 slide(f"""
 <h2>v1.2.2 vs v1.3.0 on ProteoBench: the gain is all in <em>exact</em></h2>
-{src("ProteoBench nine-species balanced", "779,879 spectra", "greedy decoding", "v1.2.2 vs v1.3.0")}
+{src("ProteoBench nine-species balanced", "779,879 spectra", "three modes", "v1.2.2 vs v1.3.0")}
 {grouped_bars(
-    [("pep/mass", [0.6946, PB_V130_GREEDY["pep_mass"]]),
-     ("pep/exact", [0.4045, PB_V130_GREEDY["pep_exact"]]),
-     ("aa/mass", [0.8335, PB_V130_GREEDY["aa_mass"]])],
+    [("greedy", [0.6946, PB_V130["greedy"][0]]),
+     ("beam-10", [0.7278, PB_V130["beam10"][0]]),
+     ("greedy+ref", [0.6964, PB_V130["greedy_refined"][0]])],
     ["v1.2.2", "v1.3.0"], [C_V122, C_V130],
-    "Greedy decoding, same dataset: v1.2.2 against v1.3.0", vmin=0.38, vmax=0.88, height=340)}
-<p class="note">Greedy only &mdash; the other six v1.3.0 modes are still running. Mass matching is a tie
-(<b>+0.0005</b>); exact matching gains <b>+0.0430</b>. Mass forgives isobaric swaps and exact does not, so a
-gain that appears only at exact level points at <b>modification and I/L calls</b>, which is what a
-133-residue vocabulary would buy. Hypothesis, not conclusion: one mode, and <code>exact+IL</code> would test it.</p>
+    "pep/mass: essentially unchanged across three modes", vmin=0.68, vmax=0.745, height=250)}
+{grouped_bars(
+    [("greedy", [0.4045, PB_V130["greedy"][1]]),
+     ("beam-10", [0.4222, PB_V130["beam10"][1]]),
+     ("greedy+ref", [0.4123, PB_V130["greedy_refined"][1]])],
+    ["v1.2.2", "v1.3.0"], [C_V122, C_V130],
+    "pep/exact: v1.3.0 gains three to four points everywhere", vmin=0.39, vmax=0.48, height=250)}
+<p class="note">Three modes now, and the split is consistent: <b>pep/mass within &plusmn;0.004</b> (+0.0005
+greedy, +0.0017 beam-10, &minus;0.0037 greedy+ref) while <b>pep/exact gains +0.0338 to +0.0455</b>. Mass
+matching forgives isobaric swaps and exact does not, so a gain that appears only at exact level points at
+<b>modification and I/L calls</b> &mdash; what a 133-residue vocabulary buys &mdash; with backbone
+sequencing unchanged. It held when tested at beam width, including in a mode whose pep/mass went the other
+way.</p>
 """)
 
 slide(f"""
 <h2>On our own data, the older checkpoint is ahead at greedy</h2>
 {src("Internal held-out, 17 sets", "pooled over all spectra", "ProteoBench scorer")}
 {internal_table()}
-<p class="note">Pooled over 17 held-out sets, scored through ProteoBench's own scorer so the columns mean the
-same thing as the previous slides. v1.2.2 greedy beats v1.3 greedy by <b>+0.0179</b> pep/mass and leads in
-12 of 17 datasets &mdash; and the v1.3 wins cluster on antibody, immunopeptide and venom samples while v1.2.2
-takes 8 of the 9 <code>ninespecies</code> sets. Beam search is worth <b>+0.0606</b> on v1.3, winning 17 of 17.</p>
+<p class="note">Pooled over 17 held-out sets, scored through ProteoBench's own scorer so the columns mean
+the same thing as the previous slides. <b>v1.2.2 leads at both beam widths</b> &mdash; greedy by
+<b>+0.0178</b>, beam-5 by <b>+0.0078</b> &mdash; which is the opposite verdict to ProteoBench's, on the same
+scorer. Beam search is worth <b>+0.0596</b> over greedy on v1.3, and remains the intervention that pays.</p>
+<p class="note callout"><b>Knapsack is settled.</b> Plain beam-5 scores <b>0.6448</b> against knapsack
+beam-5's <b>0.6458</b> &mdash; <b>+0.0010 for 7.2&times; the GPU</b>, 16 h 50 m against 121 h. ProteoBench
+measured +0.0005 for the same comparison. Two benchmarks, same answer: the knapsack constraint is not worth
+running.</p>
 <p class="note warn">The <code>aa AUC</code> for any refined or diffusion-only row is inflated and must not be
 compared across rows: InstaNovo+ emits no per-token scores, so the peptide score is broadcast across residues.</p>
 """)
@@ -746,7 +771,10 @@ slide("""
 <div>
 <h3>Settled</h3>
 <ul>
-<li>Beam search is the intervention that pays; knapsack is not, on either benchmark.</li>
+<li>Beam search is the intervention that pays. <b>Knapsack is not, and this is now measured on both
+benchmarks</b>: +0.0005 on ProteoBench, +0.0010 internally for 7.2&times; the GPU.</li>
+<li>v1.3.0's gain over v1.2.2 on ProteoBench is <b>confined to exact matching</b> (+0.034 to +0.046 across
+three modes, pep/mass within &plusmn;0.004) &mdash; modification and I/L calling, not backbone sequencing.</li>
 <li>Gated refinement is marginal on ProteoBench and negative on our data.</li>
 <li>The confidence is over-confident by ~4.4 points at the operating threshold, worst on the hardest
 organisms, and recalibration does not improve ranking.</li>
@@ -756,9 +784,11 @@ organisms, and recalibration does not improve ranking.</li>
 <div>
 <h3>Open</h3>
 <ul>
-<li><b>Six v1.3.0 modes on ProteoBench</b> still running &mdash; greedy's exact-only gain needs the beam
-modes and <code>exact+IL</code> to confirm.</li>
-<li><b>Beam-10 on both internal arms</b> running; four v1.2.2 internal modes not yet launched.</li>
+<li><b>Four v1.3.0 modes on ProteoBench</b> still running: diffusion-only and both knapsack modes, plus
+beam-10+refinement. The two refined ones are queued for re-scoring, since they run on an image predating
+the N-terminal length fix.</li>
+<li><b>Five internal runs scored but not yet in the pooled table</b> &mdash; both arms' beam-10 and
+beam-5+refinement, and v1.3 diffusion-only. Three v1.2.2 internal modes remain unlaunched.</li>
 <li>Why <b>diffusion-only is 2.3&times; slower</b> on the v1.3 checkpoint.</li>
 <li>A calibrator trained on a species-held-out split, to separate domain shift from intrinsic
 miscalibration &mdash; and to cover the five modes that keep no beams.</li>
