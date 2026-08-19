@@ -187,3 +187,21 @@ match.
 
 Grid lines are excluded from `geometry` — a label crossing a faint gridline is ordinary chart
 practice, unlike one crossing a data point or a trend line.
+
+## A limitation of the visual check
+
+`tools/check_layout.sh` measures the live DOM and is trustworthy. **Headless screenshots of this deck
+are not**, and the two disagree.
+
+Chasing an apparent clipping bug in the refinement chart cost several rounds: screenshots showed row
+labels truncated to `clambac`, one dataset label missing, and only 3 of 7 value labels drawn. Every
+one of those elements was present and correctly sized in the DOM — an in-page probe reported 22 text
+nodes, none zero-width, with sensible bounding boxes, while the rendered PNG omitted them. Two
+screenshots at different `--virtual-time-budget` values were byte-identical, so it is deterministic
+rather than a transition race, but it is a rendering artefact of the capture path and not a defect in
+the page.
+
+Consequence: **do not redesign a chart on the strength of a screenshot alone.** Check the generated
+markup and the probe output first. A richer per-dataset version of the refinement chart was replaced
+with the simpler pooled one partly on this bad evidence; the simpler chart is kept because it states
+the headline adequately, not because the other was broken.

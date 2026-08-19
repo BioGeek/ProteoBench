@@ -77,15 +77,18 @@ INTERNAL_V130 = [
     ("beam-5", 0.6448, 0.7824, 0.8825, "16 h 50 m", ""),
     ("beam-5 + refinement", 0.6399, 0.7777, 0.8344, "8 h 58 m", ""),
     ("beam-10", 0.6545, 0.7931, 0.8857, "31 h 46 m", ""),
+    ("beam-10 + refinement", 0.6491, 0.7885, 0.8370, "8 h 46 m", ""),
     ("knapsack beam-5", 0.6458, 0.7813, 0.8851, "121 h", ""),
     ("knapsack beam-5 + refinement", 0.6408, 0.7771, 0.8357, "8 h 57 m", ""),
     ("diffusion only", 0.1164, 0.3698, 0.3149, "19 h 33 m", "checkpoint cannot generate from noise"),
 ]
 INTERNAL_V122 = [
     ("greedy", 0.6031, 0.7483, 0.8785, "5 h 51 m", ""),
+    ("greedy + refinement", 0.6202, 0.7680, 0.8766, "7 h 51 m", ""),
     ("beam-5", 0.6526, 0.7889, 0.8895, "16 h 32 m", ""),
     ("beam-5 + refinement", 0.6575, 0.7978, 0.8934, "8 h 33 m", ""),
     ("beam-10", 0.6607, 0.7968, 0.8923, "31 h 35 m", ""),
+    ("beam-10 + refinement", 0.6638, 0.8037, 0.8959, "8 h 01 m", ""),
     ("diffusion only", 0.5885, 0.7600, 0.8615, "8 h 24 m", ""),
 ]
 
@@ -178,32 +181,37 @@ IL_POSITION_ACC = {"v1.2.2": 95.5, "v1.3": 89.8}
 # L share of I/L positions: ground truth against each checkpoint's predictions, helaqc.
 IL_L_SHARE = {"ground truth": 65.5, "v1.2.2": 69.0, "v1.3": 71.1}
 
-# ── per-dataset refinement delta on the internal held-out sets ──────────────────────────
-# pep/mass precision of (base + refinement) minus base, per dataset, from _scored/metrics.csv
-# (level=peptide, evaluation=mass, baseline ambiguity). Four base/refined pairs exist:
-# v1.2.2 beam-5, and v1.3 at greedy, beam-5 and knapsack beam-5. The v1.2.2 greedy and beam-10
-# refined runs are still in flight, so beam-5 is the only width where both checkpoints can be
-# compared like for like -- which is the comparison this chart is built around.
-#
-# dataset, v1.2.2 beam-5, v1.3 greedy, v1.3 beam-5, v1.3 knapsack beam-5
-REFINE_DELTA = [
-    ("woundfluids", -0.0325, -0.0016, -0.0059, -0.0046),
-    ("helaqc", -0.0181, -0.0042, -0.0047, -0.0047),
-    ("human", -0.0154, -0.0031, -0.0052, -0.0054),
-    ("herceptin", -0.0137, -0.0050, -0.0100, -0.0037),
-    ("gluc", -0.0076, -0.0025, -0.0028, -0.0028),
-    ("mouse", -0.0020, -0.0017, -0.0043, -0.0040),
-    ("tplantibodies", 0.0054, -0.0022, -0.0023, -0.0025),
-    ("sbrodae", 0.0057, -0.0010, -0.0019, -0.0022),
-    ("mmazei", 0.0066, -0.0019, -0.0037, -0.0039),
-    ("yeast", 0.0067, -0.0069, -0.0089, -0.0095),
-    ("honeybee", 0.0073, -0.0035, -0.0060, -0.0063),
-    ("snakevenoms", 0.0073, -0.0004, -0.0015, -0.0021),
-    ("tomato", 0.0082, -0.0018, -0.0038, -0.0040),
-    ("bacillus", 0.0101, -0.0027, -0.0052, -0.0052),
-    ("clambacteria", 0.0106, -0.0029, -0.0037, -0.0038),
-    ("ricebean", 0.0110, -0.0046, -0.0080, -0.0085),
-    ("immuno", 0.0123, -0.0015, -0.0031, -0.0046),
+# ── per-dataset refinement delta, every scored width, both checkpoints ──────────────────
+# (base + refinement) minus base, pep/mass precision, percentage points, from _scored/metrics.csv
+# after the 16-run pass. v1.2.2 now has three refined widths (greedy, beam-5, beam-10) and v1.3 has
+# four (those plus knapsack beam-5), so both arms get the SAME encoding -- a span across widths with
+# the median marked. An earlier version could only span v1.3 and had to draw v1.2.2 as a single dot,
+# which read as uncertainty on one arm and none on the other.
+# dataset, v1.2.2 (min, median, max), v1.3 (min, median, max)
+REFINE_SPAN = [
+    ("woundfluids", -3.77, -3.25, 0.16, -0.59, -0.35, -0.16),
+    ("helaqc", -2.15, -1.81, -0.37, -0.55, -0.47, -0.42),
+    ("human", -1.96, -1.54, 0.23, -0.58, -0.52, -0.31),
+    ("herceptin", -2.99, -1.37, 0.75, -1.00, -0.50, -0.37),
+    ("gluc", -0.86, -0.76, -0.09, -0.29, -0.28, -0.25),
+    ("mouse", -0.43, -0.20, 0.89, -0.51, -0.40, -0.17),
+    ("tplantibodies", 0.40, 0.54, 1.40, -0.25, -0.22, -0.19),
+    ("sbrodae", 0.49, 0.57, 0.91, -0.22, -0.14, -0.10),
+    ("mmazei", 0.48, 0.66, 1.93, -0.41, -0.37, -0.19),
+    ("yeast", 0.55, 0.67, 1.84, -0.96, -0.89, -0.69),
+    ("snakevenoms", 0.65, 0.73, 1.73, -0.21, -0.15, -0.04),
+    ("honeybee", 0.57, 0.73, 2.16, -0.66, -0.60, -0.35),
+    ("tomato", 0.66, 0.82, 1.83, -0.41, -0.38, -0.18),
+    ("bacillus", 0.85, 1.01, 2.34, -0.56, -0.52, -0.27),
+    ("clambacteria", 0.93, 1.06, 2.13, -0.43, -0.37, -0.29),
+    ("ricebean", 0.92, 1.10, 2.08, -0.86, -0.80, -0.46),
+    ("immuno", 0.77, 1.23, 2.61, -0.46, -0.15, 0.00),
+]
+# pooled delta by arm and width, and how many of the 17 datasets improved
+REFINE_POOLED = [
+    ("v1.2.2", "greedy", 1.71, 15), ("v1.2.2", "beam-5", 0.49, 11), ("v1.2.2", "beam-10", 0.31, 11),
+    ("v1.3", "greedy", -0.29, 0), ("v1.3", "beam-5", -0.49, 0),
+    ("v1.3", "beam-10", -0.53, 0), ("v1.3", "knapsack-5", -0.51, 0),
 ]
 
 # ── the same predictions scored twice: InstaNovo Metrics vs ProteoBench ─────────────────
@@ -301,14 +309,9 @@ STATUS = [
         }),
     ]),
     ("Internal held-out (17 sets)", MODES_INT, [
-        ("v1.3", {
-            "greedy": "done", "greedy+ref": "done", "knapsack-5": "done", "knapsack-5+ref": "done",
-            "beam-5": "done", "beam-5+ref": "done", "beam-10": "done", "diffusion": "done",
-            "beam-10+ref": "running",
-        }),
+        ("v1.3", dict.fromkeys(MODES_INT, "done")),
         ("v1.2.2", {
-            "greedy": "done", "diffusion": "done", "beam-5": "done", "beam-5+ref": "done",
-            "beam-10": "done", "greedy+ref": "running", "beam-10+ref": "running",
+            **dict.fromkeys(MODES_INT, "done"),
             "knapsack-5": "skipped", "knapsack-5+ref": "skipped",
         }),
     ]),
@@ -750,82 +753,58 @@ def il_decomposition_chart() -> str:
 
 
 def refinement_delta_chart() -> str:
-    """Per-dataset refinement delta at beam-5, one marker per checkpoint, in two panels.
+    """Pooled refinement delta by checkpoint and beam width -- seven bars, one per scored pair.
 
-    Both arms get the SAME encoding at the SAME beam width: one dot each, being
-    (base + refinement) minus base in pep/mass precision, joined by a hairline so the pair is
-    unambiguous. An earlier version drew v1.3 as a span across its three refined widths and v1.2.2 as
-    a single dot -- because v1.3 has three refined pairs scored and v1.2.2 has one -- which reads as
-    uncertainty on one arm and none on the other. It never meant that. The other two v1.3 widths agree
-    closely and are stated in the note instead.
+    This replaced a 17-row two-panel per-dataset version. That chart carried more data but fought its
+    own geometry: at the font scale a 1,560-unit viewBox needs, every text element lost its last
+    character to a clip I could not place, and three rounds of widening margins did not fix it. The
+    headline does not need 17 rows anyway -- it needs the sign of seven numbers, which is exactly what
+    this shows, with the per-dataset detail carried in the note (0 of 68 wins, spread up to -3.77 pp).
 
-    Beam-5 is the only width where both checkpoints have a scored refined arm, so it is the only
-    like-for-like row available; v1.2.2's greedy and beam-10 refined runs are still in flight.
-
-    Two panels of nine and eight rows rather than one of seventeen: a single column needs 17 rows of
-    at least 26 units to keep the labels legible at this chart's font scale, which makes it taller
-    than the slide can give it. Split, it fits at full size. Both panels share one x scale.
-
-    Internal sets only -- ProteoBench is scored as one pooled benchmark here and has no per-dataset
-    equivalent to plot. Its numbers are in the table above.
+    Diverging around zero because the sign IS the finding: every v1.2.2 bar right of the line, every
+    v1.3 bar left of it, no overlap.
     """
-    W = 1440
-    row_h = 26
-    T, B = 46, 54
-    label_w, plot_w, gap = 150, 545, 50
-    left = sorted(REFINE_DELTA, key=lambda r: r[1])
-    panels = [left[:9], left[9:]]
-    H = T + row_h * max(len(c) for c in panels) + B
-    lo, hi = -0.035, 0.016
+    # R=190: the value label sits outside the bar, so the right margin must hold it. At R=96 the
+    # label overflowed the viewBox and Chrome clipped it -- the same failure the per-dataset
+    # version had, and one the layout probe does not catch (it appears to measure text before the
+    # web font settles and so under-reports width).
+    W, H = 900, 265
+    L, R, T, B = 150, 190, 30, 48
+    row_h = (H - T - B) / len(REFINE_POOLED)
+    lo, hi = -1.0, 2.0
+
+    def px(v):
+        return L + (v - lo) / (hi - lo) * (W - L - R)
 
     parts = []
-    for pi, rows in enumerate(panels):
-        ox = pi * (label_w + plot_w + gap)
-        p0 = ox + label_w
+    for gv in (-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0):
+        x, zero = px(gv), gv == 0.0
+        parts.append(f'<line x1="{x:.1f}" y1="{T - 4}" x2="{x:.1f}" y2="{H - B}" '
+                     f'stroke="{"var(--text-secondary)" if zero else C_GRID}" stroke-width="{2 if zero else 1}"/>')
+        parts.append(f'<text x="{x:.1f}" y="{H - B + 20}" text-anchor="middle" class="tick">{gv:+.1f}</text>')
 
-        def px(v, p0=p0):
-            return p0 + (v - lo) / (hi - lo) * plot_w
-
-        for gv in (-0.03, -0.02, -0.01, 0.0, 0.01):
-            x = px(gv)
-            zero = gv == 0.0
-            parts.append(
-                f'<line x1="{x:.1f}" y1="{T - 6}" x2="{x:.1f}" y2="{H - B}" '
-                f'stroke="{"var(--text-secondary)" if zero else C_GRID}" stroke-width="{2 if zero else 1}"/>'
-            )
-            parts.append(
-                f'<text x="{x:.1f}" y="{H - B + 24}" text-anchor="middle" class="tick">{gv:+.2f}</text>'
-            )
-        parts.append(f'<text x="{px(0.0) - 10:.1f}" y="{T - 16}" text-anchor="end" class="tick">hurts &#8592;</text>')
-        parts.append(f'<text x="{px(0.0) + 10:.1f}" y="{T - 16}" class="tick">&#8594; helps</text>')
-
-        for i, (name, v122, _g3, b3, _k3) in enumerate(rows):
-            y = T + i * row_h + row_h / 2
-            parts.append(
-                f'<text x="{p0 - 14}" y="{y + 6:.1f}" text-anchor="end" class="tick strong">{esc(name)}</text>'
-            )
-            parts.append(
-                f'<line x1="{px(min(v122, b3)):.1f}" y1="{y:.1f}" x2="{px(max(v122, b3)):.1f}" y2="{y:.1f}" '
-                f'stroke="{C_GRID}" stroke-width="2"/>'
-            )
-            for val, colour, ver in ((v122, C_V122, "v1.2.2"), (b3, C_V130, "v1.3")):
-                parts.append(
-                    f'<circle cx="{px(val):.1f}" cy="{y:.1f}" r="6" fill="{colour}" stroke="var(--surface-1)" '
-                    f'stroke-width="2"><title>{ver} {esc(name)}, beam-5: {val:+.4f}</title></circle>'
-                )
-    parts.append(
-        f'<text x="{W / 2:.0f}" y="{H - 6}" text-anchor="middle" class="axis-title">'
-        f"change in pep/mass precision from adding refinement, at beam-5</text>"
-    )
-    legend = (
-        f'<span class="key"><i style="background:{C_V122}"></i>v1.2.2 beam-5</span>'
-        f'<span class="key"><i style="background:{C_V130}"></i>v1.3 beam-5</span>'
-        f'<span class="key muted">internal held-out sets, sorted by the v1.2.2 change; '
-        f"ProteoBench is pooled, see table above</span>"
-    )
+    for i, (arm, width, delta, wins) in enumerate(REFINE_POOLED):
+        y = T + i * row_h + 4
+        h = row_h - 9
+        colour = C_V122 if arm == "v1.2.2" else C_V130
+        x0, x1 = (px(0.0), px(delta)) if delta >= 0 else (px(delta), px(0.0))
+        parts.append(f'<text x="{L - 12}" y="{y + h / 2 + 4:.1f}" text-anchor="end" class="tick strong">'
+                     f"{esc(arm)} {esc(width)}</text>")
+        parts.append(f'<rect x="{x0:.1f}" y="{y:.1f}" width="{max(x1 - x0, 1):.1f}" height="{h:.1f}" '
+                     f'rx="3" fill="{colour}" opacity="0.85">'
+                     f"<title>{esc(arm)} {esc(width)}: {delta:+.2f} pp pooled, improved on "
+                     f"{wins} of 17 datasets</title></rect>")
+        tx = x1 + 10 if delta >= 0 else x0 - 10
+        anchor = "start" if delta >= 0 else "end"
+        parts.append(f'<text x="{tx:.1f}" y="{y + h / 2 + 4:.1f}" text-anchor="{anchor}" class="bar-label">'
+                     f"{delta:+.2f}</text>")
+    parts.append(f'<text x="{(L + W - R) / 2:.0f}" y="{H - 6}" text-anchor="middle" class="axis-title">'
+                 f"pooled change in pep/mass precision from refinement (percentage points)</text>")
+    legend = (f'<span class="key"><i style="background:{C_V122}"></i>v1.2.2</span>'
+              f'<span class="key"><i style="background:{C_V130}"></i>v1.3</span>'
+              f'<span class="key muted">internal held-out, 17 sets pooled</span>')
     return f'<div class="legend">{legend}</div>' + svg(
-        W, H, "".join(parts),
-        "Per-dataset change in peptide/mass precision from refinement at beam-5, both checkpoints",
+        W, H, "".join(parts), "Pooled refinement delta by checkpoint and beam width"
     )
 
 
@@ -1070,7 +1049,8 @@ slide(f"""
 <p class="lede">Two checkpoints &times; two benchmarks &times; the decoding modes that matter.</p>
 {status_matrix()}
 <p class="note">The v1.2.2 arm on ProteoBench is complete and is the reference everything else is read
-against; the v1.3.0 arm on the same data is four modes in, with the two long knapsack runs still going. Internally, seven of the nine variants are scored on at least one checkpoint. Internally both checkpoints
+against; the v1.3.0 arm on the same data is four modes in, with the two long knapsack runs still going. Internally <b>every variant is now scored on both checkpoints</b>, bar the two knapsack
+modes that were deliberately never launched on v1.2.2. Internally both checkpoints
 share one harness and one dataset list, so only the weights vary.</p>
 """)
 
@@ -1135,21 +1115,21 @@ slide(f"""
 {src("ProteoBench nine-species balanced, v1.2.2", "and internal held-out, 17 sets, both checkpoints",
       "pep/mass")}
 <table class="data compact">
-<tr><th>Change in pep/mass from adding refinement</th><th>v1.2.2 checkpoint</th><th>v1.3 checkpoint</th></tr>
+<tr><th>ProteoBench, change in pep/mass from refinement</th><th>v1.2.2</th><th>v1.3</th></tr>
 <tr><td>ProteoBench nine-species balanced</td>
     <td class="best-cell">win: <b>+0.0018 to +0.0039</b><br><span class="sub">greedy, beam-10, knapsack-10</span></td>
     <td>neutral: <b>&minus;0.0024</b> and <b>+0.0002</b><br><span class="sub">greedy, beam-10</span></td></tr>
-<tr><td>Internal held-out, 17 sets</td>
-    <td class="best-cell">win: <b>+0.0049</b> pooled<br><span class="sub">beam-5; 11 of 17 datasets</span></td>
-    <td>loss: <b>&minus;0.0029 to &minus;0.0051</b><br><span class="sub">greedy, beam-5, knapsack beam-5; 0 of 17</span></td></tr>
 </table>
 {refinement_delta_chart()}
-<p class="note">The split is by <b>checkpoint, not by dataset</b>: refinement is a clear win on both datasets
-for v1.2.2, and never a win for v1.3. It is <em>neutral</em> for v1.3 on ProteoBench (&minus;0.0024 at greedy,
-&plus;0.0002 at beam-10 &mdash; both inside the noise) and <b>uniformly negative</b> on our own data, losing in
-<b>51 of 51</b> dataset-pair comparisons: all 17 datasets at each of three widths, tightly, within 0.01.
-v1.2.2 by contrast wins on average but with a wide spread and six real losses, worst <b>&minus;0.0325</b> on
-wound fluids. Mixed and large against uniform and small.</p>
+<p class="note">The split is by <b>checkpoint, not by dataset</b>, and every refined mode is now scored on
+both arms. <b>v1.2.2 gains at all three widths; v1.3 loses at all four</b>, winning in <b>0 of 68</b>
+dataset-width comparisons &mdash; 17 datasets &times; 4 widths, not one improvement. On ProteoBench v1.3 is
+merely <em>neutral</em>, so our own data is where the penalty shows.</p>
+<p class="note">Two further readings. v1.2.2's gain <b>shrinks as the base strengthens</b> (+1.71 pp on greedy
+to +0.31 on beam-10), which is what a refiner correcting a weak first pass should do. And its spread is
+<em>wide</em> &mdash; real losses to &minus;3.77 pp on wound fluids &mdash; against v1.3's tight band inside
+1 pp: mixed and large against uniform and small. <b>v1.2.2 beam-10 + refinement is now the best internal
+result overall</b> at 0.6638 pep/mass.</p>
 """)
 
 slide(f"""
